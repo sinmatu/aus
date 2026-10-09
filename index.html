@@ -13,16 +13,44 @@
       <h1>Asset Usage System</h1>
       <p>Work · consumables · reconciliation</p>
     </div>
-    <span class="system-mark">AUS</span>
+    <div id="userArea"><span class="system-mark">AUS</span></div>
   </header>
 
+  <div id="setupBanner" class="banner hidden"></div>
+
   <main>
+    <section id="loginView" class="panel login-panel">
+      <h2>Sign in</h2>
+      <p class="muted">Use your assigned Asset Usage System account.</p>
+      <form id="loginForm">
+        <label>Email
+          <input id="loginEmail" type="email" autocomplete="username" required>
+        </label>
+        <label>Password
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <div id="loginError" class="muted hidden" role="alert"></div>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <div class="muted login-or">or</div>
+      <button id="googleLoginBtn" class="secondary" type="button">Continue with Google</button>
+    </section>
+
+    <section id="shell" class="hidden">
+    <div class="session-bar panel">
+      <div>
+        <strong id="signedInName"></strong>
+        <span id="roleBadge" class="badge"></span>
+      </div>
+      <button id="signOutBtn" class="secondary" type="button">Sign out</button>
+    </div>
+
     <nav class="tabs" aria-label="System sections">
       <button class="active" data-view="dashboard">Dashboard</button>
       <button data-view="usage">Usage Entry</button>
       <button data-view="work">Work Record</button>
       <button data-view="records">Records</button>
-      <button data-view="settings">Settings</button>
+      <button data-view="settings" data-role="manager">Settings</button>
     </nav>
 
     <section id="view-dashboard" class="view">
@@ -166,8 +194,9 @@
         </div>
       </div>
     </section>
+    </section>
   </main>
 
-  <script src="./app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
