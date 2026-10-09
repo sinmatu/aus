@@ -4,7 +4,6 @@ const fb={};
 let currentUser=null;
 let currentRole="";
 
-const KEY='sinmatu-aus-v1';
 const defaults={
   assetTypes:[
     {id:'type-lorry',name:'Lorry',fields:['Plate Number','Make / Model']},
@@ -18,7 +17,6 @@ const defaults={
 };
 let state=structuredClone(defaults);
 function save(){
-  localStorage.setItem(KEY,JSON.stringify(state));
   renderAll();
 }
 function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
@@ -78,44 +76,7 @@ async function seedFirebaseDefaults(){
     await persistSettings();
   }
 }
-async function migrateLocalDataOnce(){
-  const marker=KEY+'-firebase-migrated';
-  if(localStorage.getItem(marker)==='1')return;
-  let local=null;
-  try{local=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
-  if(!local){localStorage.setItem(marker,'1');return}
 
-  if(currentRole==='manager'){
-    const [typeSnap,assetSnap,settingsSnap]=await Promise.all([
-      fb.getDocs(fb.collection(fb.db,'assetTypes')),
-      fb.getDocs(fb.collection(fb.db,'assets')),
-      fb.getDoc(fb.doc(fb.db,'settings','global'))
-    ]);
-    if(typeSnap.empty&&Array.isArray(local.assetTypes)){
-      for(const t of local.assetTypes)await persistAssetType(t);
-    }
-    if(!settingsSnap.exists()){
-      if(Array.isArray(local.items))state.items=[...local.items];
-      if(Array.isArray(local.units))state.units=[...local.units];
-      if(Array.isArray(local.measures))state.measures=[...local.measures];
-      await persistSettings();
-    }
-    if(assetSnap.empty&&Array.isArray(local.assets)){
-      for(const a of local.assets)await persistAsset(a);
-    }
-  }
-
-  if(Array.isArray(local.records)){
-    for(const r of local.records){
-      const allowed=currentRole==='manager'||(r.createdBy===currentUser?.uid&&(r.status||'pending')==='pending');
-      if(!allowed)continue;
-      const ref=fb.doc(fb.db,recordCollection(r),r.id);
-      const existing=await fb.getDoc(ref);
-      if(!existing.exists())await persistRecord(r);
-    }
-  }
-  localStorage.setItem(marker,'1');
-}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
@@ -165,7 +126,6 @@ async function initFirebase(){
       if(!['manager','staff'].includes(role))throw Error('Account role is missing or not authorised.');
       if(status!=='active')throw Error('Account is not active.');
       currentUser=user; currentRole=role;
-      await migrateLocalDataOnce();
       await seedFirebaseDefaults();
       await loadFirebaseState();
       save();
