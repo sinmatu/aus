@@ -56,3 +56,9 @@
   #view-records{padding:14px}
   .record-filters{grid-template-columns:1fr}
 }
+
+.editable-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.editable-row>div{min-width:0}
+.editable-chip{gap:10px}
+.edit-link{border:0;background:transparent;padding:0;color:#374151;text-decoration:underline;text-underline-offset:3px;font-size:.8rem}
+.edit-link:hover{color:#111827}
