@@ -244,29 +244,36 @@ function saveCorrection(e){
 function reportRows(){
   return filteredRecords($('reportMonth').value,$('reportAsset').value,'').filter(r=>r.status!=='void');
 }
+function reportTable(records){
+  if(!records.length)return '<div class="empty">No matching report records.</div>';
+  return '<table><thead><tr><th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Reference / Sign</th></tr></thead><tbody>'+records.map(r=>{
+    const a=state.assets.find(x=>x.id===r.assetId);
+    return '<tr><td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(recordReference(r)||'—')+'</td></tr>';
+  }).join('')+'</tbody></table>';
+}
 function renderReports(){
   if(!$('reportTable'))return;
   const rows=reportRows();
   const usage=rows.filter(r=>r.kind==='usage');
   const work=rows.filter(r=>r.kind==='work');
-  const checked=rows.filter(r=>r.status==='checked').length;
-  $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Checked</span><b>'+checked+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div></div>';
-  $('reportTable').innerHTML=recordsTable(rows);
+  const assetCount=new Set(rows.map(r=>r.assetId)).size;
+  $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Assets involved</span><b>'+assetCount+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div></div>';
+  $('reportTable').innerHTML=reportTable(rows);
 }
 function reportMatrix(){
   const rows=reportRows();
   const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],[]];
-  aoa.push(['Date','Asset','Type','Detail','Status','Reference / Sign']);
+  aoa.push(['Date','Asset','Type','Detail','Reference / Sign']);
   rows.forEach(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
-    aoa.push([r.date,a?.name||'Removed asset',r.kind==='usage'?'Usage':'Work',recordDetail(r),r.status||'pending',recordReference(r)||'']);
+    aoa.push([r.date,a?.name||'Removed asset',r.kind==='usage'?'Usage':'Work',recordDetail(r),recordReference(r)||'']);
   });
   return aoa;
 }
 async function exportExcel(){
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const ws=XLSX.utils.aoa_to_sheet(reportMatrix());
-  ws['!cols']=[{wch:14},{wch:22},{wch:12},{wch:28},{wch:18},{wch:38}];
+  ws['!cols']=[{wch:14},{wch:22},{wch:12},{wch:28},{wch:38}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
   XLSX.writeFile(wb,'aus-report-'+($('reportMonth').value||'all')+'.xlsx');
 }
@@ -275,7 +282,7 @@ async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
-  const xs=[14,42,82,105,165,198];
+  const xs=[14,42,82,112,180];
   rows.slice(1).forEach(row=>{if(y>190){doc.addPage();y=14}row.forEach((v,i)=>{if(v!==undefined&&v!==null&&v!=='')doc.text(String(v).slice(0,42),xs[i]||14,y)});y+=6});
   doc.save('aus-report-'+($('reportMonth').value||'all')+'.pdf');
 }
