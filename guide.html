@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>Asset Usage System User Guide</title>
+<meta name="description" content="Operational user guide for the Asset Usage System asset, usage, work, review and reporting workflow.">
+<style>
+:root{
+  --bg:#f6f7fb;--paper:#ffffff;--paper2:#fff8f8;--line:#e6e8ef;
+  --text:#1f2937;--muted:#6b7280;--red:#d71920;--red2:#a70f15;
+  --soft:#fde8e8;--green:#138a55;--amber:#b56b00;--blue:#2457c5;
+  --shadow:0 14px 38px rgba(20,28,45,.08);--max:1180px
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{
+  margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);line-height:1.58;
+  background:
+    radial-gradient(circle at 15% 0%,rgba(215,25,32,.08),transparent 30%),
+    linear-gradient(180deg,#fff 0,#f7f8fb 220px,#f6f7fb 100%);
+}
+a{color:inherit}
+.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}
+.hero{padding:54px 0 28px}
+.badge{display:inline-flex;align-items:center;gap:7px;border:1px solid #f2c7c9;background:#fff5f5;color:var(--red2);padding:7px 11px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+h1{font-size:clamp(36px,6vw,64px);line-height:1.02;margin:16px 0 14px;letter-spacing:-.045em}
+.hero p{max-width:850px;color:var(--muted);font-size:clamp(16px,2vw,19px);margin:0}
+.quicknav{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.quicknav a{text-decoration:none;border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:10px;font-size:13px;color:#374151;box-shadow:0 3px 12px rgba(0,0,0,.03)}
+.quicknav a:hover{border-color:#efb3b6;color:var(--red2);background:#fff8f8}
+.section{padding:28px 0}
+.section-title{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.section h2{margin:0;font-size:clamp(24px,4vw,34px);letter-spacing:-.03em}
+.kicker{color:var(--red);font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.sub{color:var(--muted);font-size:14px;max-width:720px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 7px;font-size:17px}.card p{margin:0;color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sequence{counter-reset:seq;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sequence a{counter-increment:seq;text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 14px;font-size:14px;box-shadow:0 4px 16px rgba(20,28,45,.04)}
+.sequence a:before{content:counter(seq,decimal-leading-zero) "  ";color:var(--red);font-weight:900}
+.sequence a:hover{border-color:#efb3b6;background:#fffafa}
+.flow{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding-bottom:2px}
+.step{flex:1 0 150px;min-width:150px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 4px 16px rgba(20,28,45,.04)}
+.step b{display:block;font-size:13px;margin-bottom:4px}.step span{display:block;font-size:12px;color:var(--muted)}
+.arrow{align-self:center;color:var(--red);font-size:22px;font-weight:900;padding:0 2px}
+.note{border-left:4px solid var(--red);background:#fff6f6;border-radius:10px;padding:12px 14px;color:#5d2528;font-size:13px;margin-top:12px}
+.note.warn{border-left-color:#e28a00;background:#fff9ec;color:#6c4b13}
+.note.ok{border-left-color:#1c9b61;background:#effbf5;color:#245f44}
+.list{display:grid;gap:9px;margin-top:12px}.item{display:flex;gap:10px;align-items:flex-start}
+.dot{width:8px;height:8px;border-radius:999px;background:var(--red);margin-top:7px;flex:0 0 auto}
+.item div{font-size:14px;color:var(--muted)}.item strong{color:var(--text)}
+.table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 4px 16px rgba(20,28,45,.04)}
+.table th,.table td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+.table th{background:#fff3f3;color:#7b2024}.table td{color:var(--muted)}.table tr:last-child td{border-bottom:0}
+.tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:900;border:1px solid currentColor}
+.red{color:var(--red2)}.green{color:var(--green)}.amber{color:var(--amber)}.blue{color:var(--blue)}
+.rule{display:grid;grid-template-columns:180px 1fr;gap:14px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.rule:last-child{border-bottom:0}.rule b{color:#7b2024}.rule span{color:var(--muted);font-size:14px}
+.backtop{display:inline-flex;margin-top:12px;text-decoration:none;color:var(--red2);font-weight:800;font-size:13px}
+footer{padding:40px 0 54px;color:#8a909c;font-size:12px;text-align:center}
+@media(max-width:860px){
+  .grid,.grid.two,.sequence{grid-template-columns:1fr}.section-title{display:block}.flow{display:grid;overflow:visible}
+  .step{min-width:0}.arrow{transform:rotate(90deg);text-align:center;padding:0}.table{display:block;overflow-x:auto;white-space:nowrap}.rule{grid-template-columns:1fr;gap:3px}
+}
+@media(max-width:520px){.hero{padding-top:34px}.wrap{width:min(100% - 20px,var(--max))}.card{padding:15px}.quicknav a{font-size:12px;padding:8px 10px}.section{padding:23px 0}}
+</style>
+</head>
+<body>
+<header class="hero" id="top"><div class="wrap">
+  <div class="badge">Work · consumables · reconciliation</div>
+  <h1>User Guide</h1>
+  <p>This guide explains the normal working flow of the Asset Usage System: maintain asset definitions and profiles, record consumable usage and work, review records, then prepare monthly reports and exports.</p>
+  <nav class="quicknav" aria-label="Guide sections">
+    <a href="#roles">1. Roles</a>
+    <a href="#assets">2. Assets</a>
+    <a href="#usage">3. Usage Entry</a>
+    <a href="#work">4. Work Entry</a>
+    <a href="#records">5. Records & Review</a>
+    <a href="#reports">6. Reports</a>
+    <a href="#settings">7. Manager Settings</a>
+    <a href="#goodpractice">8. Good Practice</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+<section class="section">
+  <div class="section-title"><div><div class="kicker">Normal Workflow</div><h2>Use the system in this order</h2></div><div class="sub">AUS is asset-first. Usage and work are always recorded against a registered lorry or machine.</div></div>
+  <div class="sequence">
+    <a href="#roles">Sign in with an assigned active account</a>
+    <a href="#assets">Confirm the asset profile is correct</a>
+    <a href="#usage">Record fuel, battery, hydraulic, Rimula or other usage</a>
+    <a href="#work">Record the work completed by the asset</a>
+    <a href="#records">Review records and update review status</a>
+    <a href="#reports">Prepare and export monthly reports</a>
+  </div>
+  <div class="note"><strong>Core rule:</strong> every usage or work record must belong to a registered asset. The asset is the main reference point throughout AUS.</div>
+</section>
+
+<section id="roles" class="section">
+  <div class="section-title"><div><div class="kicker">01 · Roles</div><h2>Manager and Staff</h2></div><div class="sub">Only registered users with an approved role and active status may enter the system.</div></div>
+  <div class="grid two">
+    <div class="card"><h3>Staff</h3><p>Staff handles daily operational entry, including Usage Entry, Work Entry, Records and Reports according to the access rules configured for the system.</p></div>
+    <div class="card"><h3>Manager</h3><p>Manager has the operational access plus Settings, asset configuration and review controls such as Mark Checked, Correct Entry, Correction Required and Void Entry.</p></div>
+  </div>
+  <div class="note ok"><strong>Login rule:</strong> a valid Firebase login is not enough by itself. The account must also have an authorised role and <strong>status: active</strong>.</div>
+</section>
+
+<section id="assets" class="section">
+  <div class="section-title"><div><div class="kicker">02 · Assets</div><h2>Asset profiles are the centre of AUS</h2></div><div class="sub">The Assets page shows registered lorries and machines with the metadata defined for their Asset Type.</div></div>
+  <div class="grid">
+    <div class="card"><h3>Asset Type</h3><p>Examples include Lorry, Machine, Excavator or other equipment categories defined by the Manager.</p></div>
+    <div class="card"><h3>Asset Name / ID</h3><p>The main operational identifier used in forms, Records and Reports.</p></div>
+    <div class="card"><h3>Metadata</h3><p>Profile fields such as Plate Number, Make / Model, Machine ID or other fields configured under Layer 1.</p></div>
+  </div>
+  <div class="note"><strong>Assets page:</strong> this page is for profiles, not transaction history. Usage and work entries are kept in their own operational sections.</div>
+</section>
+
+<section id="usage" class="section">
+  <div class="section-title"><div><div class="kicker">03 · Usage Entry</div><h2>Record consumables against an asset</h2></div><div class="sub">The same universal form is used for fuel, batteries, hydraulic oil, Rimula and future usage items.</div></div>
+  <div class="flow">
+    <div class="step"><b>1. Date</b><span>Select the usage date.</span></div><div class="arrow">→</div>
+    <div class="step"><b>2. Asset</b><span>Choose the lorry or machine that used the item.</span></div><div class="arrow">→</div>
+    <div class="step"><b>3. Item</b><span>Select Fuel, Battery, Hydraulic, Rimula or another configured item.</span></div><div class="arrow">→</div>
+    <div class="step"><b>4. Quantity & Unit</b><span>Enter the actual quantity and unit.</span></div><div class="arrow">→</div>
+    <div class="step"><b>5. Verification</b><span>Enter Mechanic / Supervisor details when applicable.</span></div><div class="arrow">→</div>
+    <div class="step"><b>6. Save</b><span>Submit the Usage Record.</span></div>
+  </div>
+
+  <table class="table" style="margin-top:14px">
+    <thead><tr><th>Field</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>Date</td><td>The date the consumable was issued, used or replaced.</td></tr>
+      <tr><td>Asset</td><td>The lorry or machine responsible for the usage.</td></tr>
+      <tr><td>Item</td><td>The configured consumable type.</td></tr>
+      <tr><td>Quantity / Unit</td><td>The amount used and the measurement unit, such as litre, drum or pc.</td></tr>
+      <tr><td>Mechanic / Supervisor</td><td>Operational sign or verification information when needed.</td></tr>
+      <tr><td>Purpose / Remarks</td><td>Why the item was used, replaced or issued.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="work" class="section">
+  <div class="section-title"><div><div class="kicker">04 · Work Entry</div><h2>Record what the asset actually did</h2></div><div class="sub">Work records provide the operational side needed to compare usage with actual output.</div></div>
+  <div class="flow">
+    <div class="step"><b>1. Date</b><span>Select the work date.</span></div><div class="arrow">→</div>
+    <div class="step"><b>2. Asset</b><span>Choose the lorry or machine.</span></div><div class="arrow">→</div>
+    <div class="step"><b>3. Work Measure</b><span>Select hour, trip, km, load, tonne or another configured measure.</span></div><div class="arrow">→</div>
+    <div class="step"><b>4. Quantity</b><span>Enter the actual work quantity.</span></div><div class="arrow">→</div>
+    <div class="step"><b>5. Job / Reference</b><span>Add the job, site or reference when useful.</span></div><div class="arrow">→</div>
+    <div class="step"><b>6. Save</b><span>Submit the Work Entry.</span></div>
+  </div>
+  <div class="note ok"><strong>Why Work Entry matters:</strong> usage alone only shows consumption. Work Entry lets the business later compare consumption against hours, trips, distance, loads or other output.</div>
+</section>
+
+<section id="records" class="section">
+  <div class="section-title"><div><div class="kicker">05 · Records & Review</div><h2>Filter and review operational history</h2></div><div class="sub">Records follows the same simple review pattern as the Lorry System, but uses Asset and record Type.</div></div>
+
+  <div class="grid two">
+    <div class="card"><h3>Filters</h3><p>Select Month, Asset, record Type and sort order. Asset can be one specific asset or All Assets.</p></div>
+    <div class="card"><h3>Bulk Review</h3><p>Manager can select multiple reviewable records and use Mark Selected Checked when several entries have already been confirmed.</p></div>
+  </div>
+
+  <table class="table" style="margin-top:14px">
+    <thead><tr><th>Review Action</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Mark Checked</td><td>Confirms that the record has been reviewed and accepted.</td></tr>
+      <tr><td>Correct Entry</td><td>Allows an authorised correction to the individual record while retaining correction information.</td></tr>
+      <tr><td>Correction Required</td><td>Marks an individual record as needing amendment or follow-up before it is considered final.</td></tr>
+      <tr><td>Void Entry</td><td>Marks the record void so it can be excluded from normal operational reporting without treating it as an ordinary active record.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn"><strong>Bulk action:</strong> only Mark Checked should be performed in bulk. Correct Entry, Correction Required and Void Entry remain individual actions so each record is handled deliberately.</div>
+</section>
+
+<section id="reports" class="section">
+  <div class="section-title"><div><div class="kicker">06 · Reports</div><h2>Prepare monthly asset reports</h2></div><div class="sub">Reports use the selected month and asset scope, then summarise operational records before export.</div></div>
+  <div class="flow">
+    <div class="step"><b>Select Month</b><span>Choose the reporting month.</span></div><div class="arrow">→</div>
+    <div class="step"><b>Select Asset</b><span>Choose one asset or All Assets.</span></div><div class="arrow">→</div>
+    <div class="step"><b>Review Summary</b><span>Check Usage, Work, Checked and Total record counts.</span></div><div class="arrow">→</div>
+    <div class="step"><b>Review Details</b><span>Check the detailed report table.</span></div><div class="arrow">→</div>
+    <div class="step"><b>Export</b><span>Download Excel or PDF when required.</span></div>
+  </div>
+
+  <div class="grid two" style="margin-top:14px">
+    <div class="card"><h3>One Asset Selected</h3><p>The report focuses on the selected lorry or machine for the chosen month.</p></div>
+    <div class="card"><h3>All Assets Selected</h3><p>The report combines all matching asset records for the chosen month so management can review the wider operational picture.</p></div>
+  </div>
+
+  <div class="note ok"><strong>Exports:</strong> Excel and PDF use the same report scope selected on screen.</div>
+</section>
+
+<section id="settings" class="section">
+  <div class="section-title"><div><div class="kicker">07 · Manager Settings</div><h2>Layer 1 defines the system; Layer 2 creates the assets</h2></div><div class="sub">Settings is Manager-only because these definitions control what appears throughout AUS forms and profiles.</div></div>
+
+  <div class="grid two">
+    <div class="card"><h3>Layer 1 · Asset Types</h3><p>Define Asset Types such as Lorry or Machine. Each type has configurable metadata fields such as Plate Number, Make / Model or Machine ID.</p></div>
+    <div class="card"><h3>Layer 1 · Usage Items</h3><p>Define the consumables available in Usage Entry, such as Fuel, Battery, Hydraulic and Rimula.</p></div>
+    <div class="card"><h3>Layer 1 · Units</h3><p>Define measurement units such as drum, litre or pc.</p></div>
+    <div class="card"><h3>Layer 1 · Work Measures</h3><p>Define work measures such as hour, trip, km, load or tonne.</p></div>
+    <div class="card"><h3>Layer 2 · Assets</h3><p>Register the actual lorries and machines. Selecting an Asset Type automatically applies that type's metadata fields.</p></div>
+    <div class="card"><h3>Edit, Do Not Delete</h3><p>Layer 1 definitions can be edited by Manager. Existing definitions are retained rather than deleted so the system remains consistent with existing asset and record history.</p></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="rule"><b>Asset Type Name</b><span>Can be edited separately.</span></div>
+    <div class="rule"><b>Asset Metadata</b><span>Use Edit Metadata to change fields such as Plate Number or Make / Model without changing the Asset Type name.</span></div>
+    <div class="rule"><b>Usage Items</b><span>Can be added or renamed.</span></div>
+    <div class="rule"><b>Units</b><span>Can be added or renamed.</span></div>
+    <div class="rule"><b>Work Measures</b><span>Can be added or renamed.</span></div>
+  </div>
+
+  <div class="note warn"><strong>Before editing Layer 1:</strong> remember that these definitions are reused throughout the system. Use clear, stable names so existing assets and future entries remain easy to understand.</div>
+</section>
+
+<section id="goodpractice" class="section">
+  <div class="section-title"><div><div class="kicker">08 · Good Practice</div><h2>Keep asset and usage records reliable</h2></div><div class="sub">AUS is most useful when the master data and daily entries remain consistent.</div></div>
+  <div class="list">
+    <div class="item"><span class="dot"></span><div><strong>Choose the correct asset before saving.</strong> Every Usage Entry and Work Entry is tied to that asset.</div></div>
+    <div class="item"><span class="dot"></span><div><strong>Use the configured units consistently.</strong> Avoid mixing units for the same type of consumption unless the business process requires it.</div></div>
+    <div class="item"><span class="dot"></span><div><strong>Enter actual work quantities.</strong> Reliable work data is necessary for meaningful usage-to-work comparison.</div></div>
+    <div class="item"><span class="dot"></span><div><strong>Use remarks when context matters.</strong> Replacement reasons, unusual usage or job references are useful during later review.</div></div>
+    <div class="item"><span class="dot"></span><div><strong>Use review actions instead of deleting history.</strong> Checked, Correction Required and Void statuses provide a clearer audit trail.</div></div>
+    <div class="item"><span class="dot"></span><div><strong>Review Reports before export.</strong> Confirm the Month and Asset scope first, especially when All Assets is selected.</div></div>
+  </div>
+  <a class="backtop" href="#top">↑ Back to top</a>
+</section>
+</main>
+
+<footer>
+  Asset Usage System User Guide
+</footer>
+</body>
+</html>
