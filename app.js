@@ -175,11 +175,12 @@ function recordsTable(records){
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
-  return state.records.filter(r=>(!month||r.date.startsWith(month))&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>b.date.localeCompare(a.date));
+  const dir=$('recordSort')?.value==='asc'?1:-1;
+  return state.records.filter(r=>(!month||r.date.startsWith(month))&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>dir*a.date.localeCompare(b.date));
 }
 function renderRecords(){
   const rows=filteredRecords($('recordMonth').value,$('recordAsset').value,$('recordKind').value);
-  $('recordCount').textContent=rows.length+' record'+(rows.length===1?'':'s');
+  $('recordCount').textContent=rows.length+' shown';
   $('recordsTable').innerHTML=recordsTable(rows);
   updateBulkReview();
 }
@@ -278,9 +279,8 @@ $('exportPdf').addEventListener('click',exportPdf);
 function renderAll(){renderSelectors();renderDefinitions();renderAssets();renderMetaFields();renderAssetProfiles();renderRecords();renderReports()}
 
 $('assetTypeSelect').addEventListener('change',renderMetaFields);
-$('recordMonth').addEventListener('change',renderRecords);
-$('recordAsset').addEventListener('change',renderRecords);
-$('recordKind').addEventListener('change',renderRecords);
+$('recordApply').addEventListener('click',renderRecords);
+$('recordSort').addEventListener('change',renderRecords);
 $('reportMonth').addEventListener('change',renderReports);
 $('reportAsset').addEventListener('change',renderReports);
 
