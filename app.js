@@ -84,19 +84,34 @@ async function migrateLocalDataOnce(){
   let local=null;
   try{local=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
   if(!local){localStorage.setItem(marker,'1');return}
+
   if(currentRole==='manager'){
-    if(Array.isArray(local.assetTypes))for(const t of local.assetTypes)await persistAssetType(t);
-    if(Array.isArray(local.items))state.items=[...local.items];
-    if(Array.isArray(local.units))state.units=[...local.units];
-    if(Array.isArray(local.measures))state.measures=[...local.measures];
-    if(Array.isArray(local.items)||Array.isArray(local.units)||Array.isArray(local.measures))await persistSettings();
-    if(Array.isArray(local.assets))for(const a of local.assets)await persistAsset(a);
+    const [typeSnap,assetSnap,settingsSnap]=await Promise.all([
+      fb.getDocs(fb.collection(fb.db,'assetTypes')),
+      fb.getDocs(fb.collection(fb.db,'assets')),
+      fb.getDoc(fb.doc(fb.db,'settings','global'))
+    ]);
+    if(typeSnap.empty&&Array.isArray(local.assetTypes)){
+      for(const t of local.assetTypes)await persistAssetType(t);
+    }
+    if(!settingsSnap.exists()){
+      if(Array.isArray(local.items))state.items=[...local.items];
+      if(Array.isArray(local.units))state.units=[...local.units];
+      if(Array.isArray(local.measures))state.measures=[...local.measures];
+      await persistSettings();
+    }
+    if(assetSnap.empty&&Array.isArray(local.assets)){
+      for(const a of local.assets)await persistAsset(a);
+    }
   }
+
   if(Array.isArray(local.records)){
     for(const r of local.records){
-      if(currentRole==='manager'||(r.createdBy===currentUser?.uid&&(r.status||'pending')==='pending')){
-        await persistRecord(r);
-      }
+      const allowed=currentRole==='manager'||(r.createdBy===currentUser?.uid&&(r.status||'pending')==='pending');
+      if(!allowed)continue;
+      const ref=fb.doc(fb.db,recordCollection(r),r.id);
+      const existing=await fb.getDoc(ref);
+      if(!existing.exists())await persistRecord(r);
     }
   }
   localStorage.setItem(marker,'1');
