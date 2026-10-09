@@ -132,6 +132,13 @@
             <option value="work">Work</option>
           </select>
         </label>
+        <label>Sort
+          <select id="recordSort">
+            <option value="desc">Date ↓ Newest first</option>
+            <option value="asc">Date ↑ Oldest first</option>
+          </select>
+        </label>
+        <button id="recordApply" class="secondary record-apply" type="button">Apply</button>
       </div>
 
       <div id="recordBulkBar" class="bulk-review hidden" data-role="manager">
@@ -245,6 +252,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261009-02"></script>
+  <script type="module" src="./app.js?v=20261009-03"></script>
 </body>
 </html>
