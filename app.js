@@ -109,6 +109,7 @@ function renderSelectors(){
   const allAssets='<option value="">All Assets</option>'+state.assets.map(a=>'<option value="'+esc(a.id)+'">'+esc(assetLabel(a))+'</option>').join('');
   $('recordAsset').innerHTML=allAssets;
   $('reportAsset').innerHTML=allAssets;
+  $('reportItem').innerHTML='<option value="">All Items</option>'+state.items.map(i=>'<option value="'+esc(i)+'">'+esc(i)+'</option>').join('');
   $('usageItem').innerHTML=optionList(state.items,'Select item');
   $('usageUnit').innerHTML=optionList(state.units,'Select unit');
   $('workMeasure').innerHTML=optionList(state.measures,'Select measure');
@@ -242,7 +243,10 @@ function saveCorrection(e){
   save();
 }
 function reportRows(){
-  return filteredRecords($('reportMonth').value,$('reportAsset').value,'').filter(r=>r.status!=='void');
+  const item=$('reportItem').value;
+  return filteredRecords($('reportMonth').value,$('reportAsset').value,'')
+    .filter(r=>r.status!=='void')
+    .filter(r=>!item||(r.kind==='usage'&&r.item===item));
 }
 function reportTable(records){
   if(!records.length)return '<div class="empty">No matching report records.</div>';
@@ -262,7 +266,7 @@ function renderReports(){
 }
 function reportMatrix(){
   const rows=reportRows();
-  const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],[]];
+  const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],['Asset',$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected'):'All Assets'],['Item',$('reportItem').value||'All Items'],[]];
   aoa.push(['Date','Asset','Type','Detail','Reference / Sign']);
   rows.forEach(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
@@ -296,6 +300,7 @@ $('recordApply').addEventListener('click',renderRecords);
 $('recordSort').addEventListener('change',renderRecords);
 $('reportMonth').addEventListener('change',renderReports);
 $('reportAsset').addEventListener('change',renderReports);
+$('reportItem').addEventListener('change',renderReports);
 
 $('recordsTable').addEventListener('click',e=>{
   if(e.target.id==='selectVisibleRecords'){document.querySelectorAll('#recordsTable .record-select').forEach(x=>x.checked=e.target.checked);updateBulkReview();return}
