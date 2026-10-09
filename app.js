@@ -16,9 +16,91 @@ const defaults={
   assets:[],
   records:[]
 };
-let state=load();
-function load(){try{const x=JSON.parse(localStorage.getItem(KEY));return x?{...structuredClone(defaults),...x}:structuredClone(defaults)}catch{return structuredClone(defaults)}}
-function save(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
+let state=structuredClone(defaults);
+function save(){
+  localStorage.setItem(KEY,JSON.stringify(state));
+  renderAll();
+}
+function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
+async function persistSettings(){
+  await fb.setDoc(fb.doc(fb.db,'settings','global'),{
+    items:state.items,
+    units:state.units,
+    measures:state.measures,
+    updatedAt:new Date().toISOString(),
+    updatedBy:currentUser?.uid||''
+  },{merge:true});
+}
+async function persistAssetType(t){
+  await fb.setDoc(fb.doc(fb.db,'assetTypes',t.id),{name:t.name,fields:t.fields},{merge:true});
+}
+async function persistAsset(a){
+  await fb.setDoc(fb.doc(fb.db,'assets',a.id),{
+    typeId:a.typeId,
+    name:a.name,
+    meta:a.meta||{}
+  },{merge:true});
+}
+async function persistRecord(r){
+  const data={...r};delete data.id;delete data.kind;
+  await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data,{merge:true});
+}
+async function loadFirebaseState(){
+  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap]=await Promise.all([
+    fb.getDocs(fb.collection(fb.db,'assetTypes')),
+    fb.getDocs(fb.collection(fb.db,'assets')),
+    fb.getDocs(fb.collection(fb.db,'usageRecords')),
+    fb.getDocs(fb.collection(fb.db,'workRecords')),
+    fb.getDoc(fb.doc(fb.db,'settings','global'))
+  ]);
+  state={
+    assetTypes:typeSnap.docs.map(d=>({id:d.id,...d.data()})),
+    items:settingsSnap.exists()&&Array.isArray(settingsSnap.data().items)?settingsSnap.data().items:[],
+    units:settingsSnap.exists()&&Array.isArray(settingsSnap.data().units)?settingsSnap.data().units:[],
+    measures:settingsSnap.exists()&&Array.isArray(settingsSnap.data().measures)?settingsSnap.data().measures:[],
+    assets:assetSnap.docs.map(d=>({id:d.id,...d.data()})),
+    records:[
+      ...usageSnap.docs.map(d=>({id:d.id,kind:'usage',...d.data()})),
+      ...workSnap.docs.map(d=>({id:d.id,kind:'work',...d.data()}))
+    ]
+  };
+}
+async function seedFirebaseDefaults(){
+  if(currentRole!=='manager')return;
+  const typeSnap=await fb.getDocs(fb.collection(fb.db,'assetTypes'));
+  if(typeSnap.empty){
+    for(const t of defaults.assetTypes)await persistAssetType(t);
+  }
+  const settingsRef=fb.doc(fb.db,'settings','global');
+  const settingsSnap=await fb.getDoc(settingsRef);
+  if(!settingsSnap.exists()){
+    state.items=[...defaults.items];state.units=[...defaults.units];state.measures=[...defaults.measures];
+    await persistSettings();
+  }
+}
+async function migrateLocalDataOnce(){
+  const marker=KEY+'-firebase-migrated';
+  if(localStorage.getItem(marker)==='1')return;
+  let local=null;
+  try{local=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
+  if(!local){localStorage.setItem(marker,'1');return}
+  if(currentRole==='manager'){
+    if(Array.isArray(local.assetTypes))for(const t of local.assetTypes)await persistAssetType(t);
+    if(Array.isArray(local.items))state.items=[...local.items];
+    if(Array.isArray(local.units))state.units=[...local.units];
+    if(Array.isArray(local.measures))state.measures=[...local.measures];
+    if(Array.isArray(local.items)||Array.isArray(local.units)||Array.isArray(local.measures))await persistSettings();
+    if(Array.isArray(local.assets))for(const a of local.assets)await persistAsset(a);
+  }
+  if(Array.isArray(local.records)){
+    for(const r of local.records){
+      if(currentRole==='manager'||(r.createdBy===currentUser?.uid&&(r.status||'pending')==='pending')){
+        await persistRecord(r);
+      }
+    }
+  }
+  localStorage.setItem(marker,'1');
+}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
@@ -67,7 +149,12 @@ async function initFirebase(){
       if(profile.uid && profile.uid!==user.uid)throw Error('Account profile does not match this signed-in user.');
       if(!['manager','staff'].includes(role))throw Error('Account role is missing or not authorised.');
       if(status!=='active')throw Error('Account is not active.');
-      currentUser=user; currentRole=role; showShell();
+      currentUser=user; currentRole=role;
+      await migrateLocalDataOnce();
+      await seedFirebaseDefaults();
+      await loadFirebaseState();
+      save();
+      showShell();
     }catch(err){
       $('loginError').textContent=err.message||'Account is not authorised.';
       $('loginError').classList.remove('hidden');
