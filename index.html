@@ -46,23 +46,20 @@
     </div>
 
     <nav class="tabs" aria-label="System sections">
-      <button class="active" data-view="dashboard">Dashboard</button>
+      <button class="active" data-view="assets">Assets</button>
       <button data-view="usage">Usage Entry</button>
-      <button data-view="work">Work Record</button>
+      <button data-view="work">Work Entry</button>
       <button data-view="records">Records</button>
+      <button data-view="reports">Reports</button>
       <button data-view="settings" data-role="manager">Settings</button>
     </nav>
 
-    <section id="view-dashboard" class="view">
+    <section id="view-assets" class="view">
       <div class="page-head">
-        <div><div class="eyebrow">Overview</div><h2>Asset usage at a glance</h2></div>
-        <p class="muted">Every usage and work record is tied to one registered lorry or machine.</p>
+        <div><h2>Assets</h2><span id="assetProfileCount" class="muted"></span></div>
+        <p class="muted">Registered lorries and machines with their configured profile information.</p>
       </div>
-      <div id="summaryCards" class="summary-grid"></div>
-      <div class="panel">
-        <div class="section-head"><div><h3>Recent records</h3><p class="muted">Latest usage and work activity.</p></div></div>
-        <div id="recentRecords" class="table-wrap"></div>
-      </div>
+      <div id="assetProfiles" class="asset-profile-grid"></div>
     </section>
 
     <section id="view-usage" class="view hidden">
@@ -93,7 +90,7 @@
 
     <section id="view-work" class="view hidden">
       <div class="page-head">
-        <div><div class="eyebrow">Work</div><h2>New Work Record</h2></div>
+        <div><div class="eyebrow">Work</div><h2>New Work Entry</h2></div>
         <p class="muted">Record what the lorry or machine actually did so usage can later be reconciled against work.</p>
       </div>
       <div class="panel">
@@ -108,26 +105,56 @@
             <label>Job / reference<input id="workJob" maxlength="100" placeholder="Optional job or site"></label>
           </div>
           <label>Remarks<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
-          <button class="primary" type="submit">Save Work Record</button>
+          <button class="primary" type="submit">Save Work Entry</button>
         </form>
       </div>
     </section>
 
-    <section id="view-records" class="view hidden">
-      <div class="page-head">
-        <div><div class="eyebrow">History</div><h2>Records</h2></div>
-        <p class="muted">Filter the history by asset and record type.</p>
+    <section id="view-records" class="view panel hidden">
+      <div class="section-head">
+        <div>
+          <h2>Records</h2>
+          <span id="recordCount" class="muted"></span>
+        </div>
       </div>
-      <div class="panel">
-        <div class="filters">
+
+      <div class="filters record-filters">
+        <label>Month
+          <input id="recordMonth" type="month">
+        </label>
+        <label>Asset
           <select id="recordAsset"></select>
+        </label>
+        <label>Type
           <select id="recordKind">
-            <option value="">All record types</option>
+            <option value="">All records</option>
             <option value="usage">Usage</option>
             <option value="work">Work</option>
           </select>
+        </label>
+      </div>
+
+      <div id="recordBulkBar" class="bulk-review hidden" data-role="manager">
+        <span id="recordSelectedCount" class="muted">0 selected</span>
+        <button id="markSelectedChecked" class="primary" type="button" disabled>Mark Selected Checked</button>
+      </div>
+
+      <div id="recordsTable" class="table-wrap"></div>
+    </section>
+
+    <section id="view-reports" class="view panel hidden">
+      <div class="section-head">
+        <h2>Reports & Reconciliation</h2>
+        <div class="report-controls">
+          <input id="reportMonth" type="month">
+          <select id="reportAsset"></select>
         </div>
-        <div id="recordsTable" class="table-wrap"></div>
+      </div>
+      <div id="reportSummary"></div>
+      <div id="reportTable" class="table-wrap"></div>
+      <div class="actions report-actions">
+        <button id="exportExcel" class="secondary" type="button">Export Excel</button>
+        <button id="exportPdf" class="secondary" type="button">Export PDF</button>
       </div>
     </section>
 
@@ -197,6 +224,27 @@
     </section>
   </main>
 
-  <script type="module" src="./app.js"></script>
+  <dialog id="correctionDialog" class="correction-dialog">
+    <form id="correctionForm" method="dialog">
+      <div class="section-head">
+        <div>
+          <h2>Correct Entry</h2>
+          <p id="correctionOriginal" class="muted"></p>
+        </div>
+        <button id="correctionClose" class="secondary" type="button">Close</button>
+      </div>
+      <input id="correctionRecordId" type="hidden">
+      <label>Correction note
+        <textarea id="correctionNote" rows="3" maxlength="300" required placeholder="Describe the correction"></textarea>
+      </label>
+      <div id="correctionFields"></div>
+      <div class="actions">
+        <button class="primary" type="submit">Save Correction</button>
+        <button id="correctionCancel" class="secondary" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js?v=20261009-02"></script>
 </body>
 </html>
