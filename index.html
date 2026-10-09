@@ -153,8 +153,9 @@
       <div class="section-head reports-head">
         <h2>Reports & Reconciliation</h2>
         <div class="report-controls">
-          <input id="reportMonth" type="month">
-          <select id="reportAsset"></select>
+          <input id="reportMonth" type="month" aria-label="Report month">
+          <select id="reportAsset" aria-label="Report asset"></select>
+          <select id="reportItem" aria-label="Report item"></select>
         </div>
       </div>
       <div id="reportSummary"></div>
@@ -252,6 +253,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261009-04"></script>
+  <script type="module" src="./app.js?v=20261009-05"></script>
 </body>
 </html>
