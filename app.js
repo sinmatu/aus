@@ -244,16 +244,49 @@ function saveCorrection(e){
 }
 function reportRows(){
   const item=$('reportItem').value;
-  return filteredRecords($('reportMonth').value,$('reportAsset').value,'')
+  return state.records
+    .filter(r=>(!$('reportMonth').value||r.date.startsWith($('reportMonth').value)))
+    .filter(r=>(!$('reportAsset').value||r.assetId===$('reportAsset').value))
     .filter(r=>r.status!=='void')
     .filter(r=>!item||(r.kind==='usage'&&r.item===item));
 }
+function reportAssetGroups(records){
+  const selected=$('reportAsset').value;
+  const ids=[];
+  if(selected){
+    ids.push(selected);
+  }else{
+    state.assets.forEach(a=>{
+      if(records.some(r=>r.assetId===a.id))ids.push(a.id);
+    });
+    records.forEach(r=>{
+      if(!ids.includes(r.assetId))ids.push(r.assetId);
+    });
+  }
+  return ids.map(assetId=>{
+    const asset=state.assets.find(a=>a.id===assetId);
+    const rows=records.filter(r=>r.assetId===assetId);
+    const usage=rows.filter(r=>r.kind==='usage').sort((a,b)=>b.date.localeCompare(a.date));
+    const work=rows.filter(r=>r.kind==='work').sort((a,b)=>b.date.localeCompare(a.date));
+    return {assetId,name:asset?.name||'Removed asset',usage,work};
+  }).filter(g=>g.usage.length||g.work.length);
+}
+function reportRowsTable(records,kind){
+  if(!records.length)return '';
+  const label=kind==='usage'?'Usage':'Work';
+  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th>Reference / Sign</th></tr></thead><tbody>'+records.map(r=>
+    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(recordReference(r)||'—')+'</td></tr>'
+  ).join('')+'</tbody></table></div>';
+}
 function reportTable(records){
   if(!records.length)return '<div class="empty">No matching report records.</div>';
-  return '<table><thead><tr><th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Reference / Sign</th></tr></thead><tbody>'+records.map(r=>{
-    const a=state.assets.find(x=>x.id===r.assetId);
-    return '<tr><td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(recordReference(r)||'—')+'</td></tr>';
-  }).join('')+'</tbody></table>';
+  const groups=reportAssetGroups(records);
+  return groups.map(g=>
+    '<section class="report-asset-group"><h3>'+esc(g.name)+'</h3>'+
+    reportRowsTable(g.usage,'usage')+
+    reportRowsTable(g.work,'work')+
+    '</section>'
+  ).join('');
 }
 function renderReports(){
   if(!$('reportTable'))return;
@@ -267,17 +300,27 @@ function renderReports(){
 function reportMatrix(){
   const rows=reportRows();
   const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],['Asset',$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected'):'All Assets'],['Item',$('reportItem').value||'All Items'],[]];
-  aoa.push(['Date','Asset','Type','Detail','Reference / Sign']);
-  rows.forEach(r=>{
-    const a=state.assets.find(x=>x.id===r.assetId);
-    aoa.push([r.date,a?.name||'Removed asset',r.kind==='usage'?'Usage':'Work',recordDetail(r),recordReference(r)||'']);
+  const groups=reportAssetGroups(rows);
+  groups.forEach((g,gi)=>{
+    aoa.push([g.name]);
+    if(g.usage.length){
+      aoa.push(['Usage']);
+      aoa.push(['Date','Type','Detail','Reference / Sign']);
+      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),recordReference(r)||'']));
+    }
+    if(g.work.length){
+      aoa.push(['Work']);
+      aoa.push(['Date','Type','Detail','Reference / Sign']);
+      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordReference(r)||'']));
+    }
+    if(gi<groups.length-1)aoa.push([]);
   });
   return aoa;
 }
 async function exportExcel(){
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const ws=XLSX.utils.aoa_to_sheet(reportMatrix());
-  ws['!cols']=[{wch:14},{wch:22},{wch:12},{wch:28},{wch:38}];
+  ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:42}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
   XLSX.writeFile(wb,'aus-report-'+($('reportMonth').value||'all')+'.xlsx');
 }
@@ -286,7 +329,7 @@ async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
-  const xs=[14,42,82,112,180];
+  const xs=[14,52,90,155];
   rows.slice(1).forEach(row=>{if(y>190){doc.addPage();y=14}row.forEach((v,i)=>{if(v!==undefined&&v!==null&&v!=='')doc.text(String(v).slice(0,42),xs[i]||14,y)});y+=6});
   doc.save('aus-report-'+($('reportMonth').value||'all')+'.pdf');
 }
