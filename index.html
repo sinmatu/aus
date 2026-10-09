@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Asset Usage System | Sin Matu Enterprise</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Asset Usage System</h1>
+      <p>Work · consumables · reconciliation</p>
+    </div>
+    <span class="system-mark">AUS</span>
+  </header>
+
+  <main>
+    <nav class="tabs" aria-label="System sections">
+      <button class="active" data-view="dashboard">Dashboard</button>
+      <button data-view="usage">Usage Entry</button>
+      <button data-view="work">Work Record</button>
+      <button data-view="records">Records</button>
+      <button data-view="settings">Settings</button>
+    </nav>
+
+    <section id="view-dashboard" class="view">
+      <div class="page-head">
+        <div><div class="eyebrow">Overview</div><h2>Asset usage at a glance</h2></div>
+        <p class="muted">Every usage and work record is tied to one registered lorry or machine.</p>
+      </div>
+      <div id="summaryCards" class="summary-grid"></div>
+      <div class="panel">
+        <div class="section-head"><div><h3>Recent records</h3><p class="muted">Latest usage and work activity.</p></div></div>
+        <div id="recentRecords" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section id="view-usage" class="view hidden">
+      <div class="page-head">
+        <div><div class="eyebrow">Usage</div><h2>New Usage Entry</h2></div>
+        <p class="muted">Fuel, batteries, hydraulic oil, Rimula and future consumables all use the same asset-first record.</p>
+      </div>
+      <div class="panel">
+        <form id="usageForm">
+          <div class="grid two">
+            <label>Date<input id="usageDate" type="date" required></label>
+            <label>Asset<select id="usageAsset" required></select></label>
+          </div>
+          <div class="grid three">
+            <label>Item<select id="usageItem" required></select></label>
+            <label>Quantity<input id="usageQty" type="number" min="0" step="0.01" required></label>
+            <label>Unit<select id="usageUnit" required></select></label>
+          </div>
+          <div class="grid two">
+            <label>Mechanic<input id="usageMechanic" maxlength="80" placeholder="Mechanic name"></label>
+            <label>Supervisor<input id="usageSupervisor" maxlength="80" placeholder="Supervisor name"></label>
+          </div>
+          <label>Purpose / remarks<textarea id="usageRemarks" rows="3" maxlength="400" placeholder="Why was this item used or replaced?"></textarea></label>
+          <button class="primary" type="submit">Save Usage Record</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="view-work" class="view hidden">
+      <div class="page-head">
+        <div><div class="eyebrow">Work</div><h2>New Work Record</h2></div>
+        <p class="muted">Record what the lorry or machine actually did so usage can later be reconciled against work.</p>
+      </div>
+      <div class="panel">
+        <form id="workForm">
+          <div class="grid two">
+            <label>Date<input id="workDate" type="date" required></label>
+            <label>Asset<select id="workAsset" required></select></label>
+          </div>
+          <div class="grid three">
+            <label>Work measure<select id="workMeasure" required></select></label>
+            <label>Quantity<input id="workQty" type="number" min="0" step="0.01" required></label>
+            <label>Job / reference<input id="workJob" maxlength="100" placeholder="Optional job or site"></label>
+          </div>
+          <label>Remarks<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
+          <button class="primary" type="submit">Save Work Record</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="view-records" class="view hidden">
+      <div class="page-head">
+        <div><div class="eyebrow">History</div><h2>Records</h2></div>
+        <p class="muted">Filter the history by asset and record type.</p>
+      </div>
+      <div class="panel">
+        <div class="filters">
+          <select id="recordAsset"></select>
+          <select id="recordKind">
+            <option value="">All record types</option>
+            <option value="usage">Usage</option>
+            <option value="work">Work</option>
+          </select>
+        </div>
+        <div id="recordsTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view hidden">
+      <div class="page-head">
+        <div><div class="eyebrow">Configuration</div><h2>Global Settings</h2></div>
+        <p class="muted">Layer 1 defines what the rest of AUS can use. Layer 2 creates the actual assets used by forms and records.</p>
+      </div>
+
+      <div class="settings-stack">
+        <div class="panel">
+          <div class="layer-label">Layer 1 · System Definitions</div>
+          <div class="grid two settings-grid">
+            <div>
+              <h3>Asset Types</h3>
+              <p class="muted">Define a type and the metadata fields assets of that type should carry.</p>
+              <form id="assetTypeForm">
+                <input id="assetTypeName" placeholder="e.g. Lorry, Excavator" maxlength="60" required>
+                <input id="assetTypeFields" placeholder="Meta fields, comma separated" maxlength="250">
+                <button class="secondary" type="submit">Add Asset Type</button>
+              </form>
+              <div id="assetTypeList" class="stack-list"></div>
+            </div>
+
+            <div>
+              <h3>Usage Items</h3>
+              <p class="muted">Items available to the universal Usage Entry form.</p>
+              <form id="itemForm" class="inline-form">
+                <input id="itemName" placeholder="e.g. Fuel" maxlength="60" required>
+                <button class="secondary" type="submit">Add</button>
+              </form>
+              <div id="itemList" class="chips"></div>
+
+              <h3 class="subsection">Units</h3>
+              <form id="unitForm" class="inline-form">
+                <input id="unitName" placeholder="e.g. litre, drum, pc" maxlength="30" required>
+                <button class="secondary" type="submit">Add</button>
+              </form>
+              <div id="unitList" class="chips"></div>
+
+              <h3 class="subsection">Work Measures</h3>
+              <form id="measureForm" class="inline-form">
+                <input id="measureName" placeholder="e.g. hour, trip, km" maxlength="30" required>
+                <button class="secondary" type="submit">Add</button>
+              </form>
+              <div id="measureList" class="chips"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="layer-label">Layer 2 · Assets</div>
+          <h3>Register Asset</h3>
+          <p class="muted">Choose an Asset Type first. Its configured metadata fields will appear automatically.</p>
+          <form id="assetForm">
+            <div class="grid two">
+              <label>Asset Type<select id="assetTypeSelect" required></select></label>
+              <label>Asset Name / ID<input id="assetName" placeholder="e.g. LD1234 or EXC-02" maxlength="80" required></label>
+            </div>
+            <div id="assetMetaFields" class="grid two"></div>
+            <button class="primary" type="submit">Register Asset</button>
+          </form>
+          <div id="assetList" class="asset-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
