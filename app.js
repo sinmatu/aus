@@ -452,18 +452,31 @@ $('correctionForm').addEventListener('submit',saveCorrection);
 $('correctionClose').addEventListener('click',()=>$('correctionDialog').close());
 $('correctionCancel').addEventListener('click',()=>$('correctionDialog').close());
 
-$('assetTypeForm').addEventListener('submit',e=>{
+$('assetTypeForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const name=$('assetTypeName').value.trim();
   const fields=$('assetTypeFields').value.split(',').map(x=>x.trim()).filter(Boolean);
-  state.assetTypes.push({id:uid('type'),name,fields}); e.target.reset(); save();
+  const t={id:uid('type'),name,fields};
+  state.assetTypes.push(t);
+  await persistAssetType(t);
+  e.target.reset();
+  save();
 });
 $('itemForm').addEventListener('submit',e=>addSimple(e,'itemName','items'));
 $('unitForm').addEventListener('submit',e=>addSimple(e,'unitName','units'));
 $('measureForm').addEventListener('submit',e=>addSimple(e,'measureName','measures'));
-function addSimple(e,input,key){e.preventDefault();const v=$(input).value.trim();if(v&&!state[key].includes(v))state[key].push(v);e.target.reset();save()}
+async function addSimple(e,input,key){
+  e.preventDefault();
+  const v=$(input).value.trim();
+  if(v&&!state[key].includes(v)){
+    state[key].push(v);
+    await persistSettings();
+  }
+  e.target.reset();
+  save();
+}
 
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
   const nameBtn=e.target.closest('[data-edit-type-name]');
   if(nameBtn){
     const t=state.assetTypes.find(x=>x.id===nameBtn.dataset.editTypeName);if(!t)return;
@@ -472,6 +485,7 @@ document.addEventListener('click',e=>{
     const cleanName=name.trim();
     if(!cleanName)return alert('Asset Type name cannot be empty.');
     t.name=cleanName;
+    await persistAssetType(t);
     save();
     return;
   }
@@ -494,6 +508,8 @@ document.addEventListener('click',e=>{
       a.meta=next;
     });
     t.fields=newFields;
+    await persistAssetType(t);
+    for(const a of state.assets.filter(a=>a.typeId===t.id))await persistAsset(a);
     save();
     return;
   }
@@ -509,29 +525,43 @@ document.addEventListener('click',e=>{
     if(!clean)return alert('Value cannot be empty.');
     if(state[key].some((v,i)=>i!==index&&v.toLowerCase()===clean.toLowerCase()))return alert('That value already exists.');
     state[key][index]=clean;
+    await persistSettings();
     save();
     return;
   }
 
   const a=e.target.closest('[data-delete-asset]');
-  if(a){const id=a.dataset.deleteAsset;if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}state.assets=state.assets.filter(x=>x.id!==id);save()}
+  if(a){
+    const id=a.dataset.deleteAsset;
+    if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}
+    await fb.deleteDoc(fb.doc(fb.db,'assets',id));
+    state.assets=state.assets.filter(x=>x.id!==id);
+    save();
+  }
 });
 
-$('assetForm').addEventListener('submit',e=>{
+$('assetForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const type=state.assetTypes.find(x=>x.id===$('assetTypeSelect').value); if(!type)return;
   const meta={}; document.querySelectorAll('#assetMetaFields [data-meta-index]').forEach(inp=>meta[type.fields[Number(inp.dataset.metaIndex)]]=inp.value.trim());
-  state.assets.push({id:uid('asset'),typeId:type.id,name:$('assetName').value.trim(),meta});
-  e.target.reset(); save();
+  const a={id:uid('asset'),typeId:type.id,name:$('assetName').value.trim(),meta};
+  state.assets.push(a);
+  await persistAsset(a);
+  e.target.reset();
+  save();
 });
-$('usageForm').addEventListener('submit',e=>{
+$('usageForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  state.records.push({id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item:$('usageItem').value,qty:Number($('usageQty').value),unit:$('usageUnit').value,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()});
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item:$('usageItem').value,qty:Number($('usageQty').value),unit:$('usageUnit').value,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  await persistRecord(r);
+  state.records.push(r);
   e.target.reset(); $('usageDate').value=today(); save(); alert('Usage record saved.');
 });
-$('workForm').addEventListener('submit',e=>{
+$('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  state.records.push({id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()});
+  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  await persistRecord(r);
+  state.records.push(r);
   e.target.reset(); $('workDate').value=today(); save(); alert('Work record saved.');
 });
 
