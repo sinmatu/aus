@@ -58,8 +58,12 @@ async function initFirebase(){
     try{
       const snap=await F.getDoc(F.doc(fb.db,'users',user.uid));
       if(!snap.exists())throw Error('Account is not authorised for this system.');
-      const role=snap.data().role||'';
+      const profile=snap.data();
+      const role=profile.role||'';
+      const status=profile.status||'';
+      if(profile.uid && profile.uid!==user.uid)throw Error('Account profile does not match this signed-in user.');
       if(!['manager','staff'].includes(role))throw Error('Account role is missing or not authorised.');
+      if(status!=='active')throw Error('Account is not active.');
       currentUser=user; currentRole=role; showShell();
     }catch(err){
       $('loginError').textContent=err.message||'Account is not authorised.';
