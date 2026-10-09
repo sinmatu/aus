@@ -234,53 +234,6 @@ function saveCorrection(e){
   $('correctionDialog').close();
   save();
 }
-function renderDefinitions(){
-  $('assetTypeList').innerHTML=state.assetTypes.length?state.assetTypes.map(t=>'<div class="stack-row"><b>'+esc(t.name)+'</b><small>'+esc(t.fields.join(' · ')||'No metadata fields')+'</small></div>').join(''):'<div class="empty">No asset types yet.</div>';
-  renderChips('itemList',state.items,'items');
-  renderChips('unitList',state.units,'units');
-  renderChips('measureList',state.measures,'measures');
-}
-function renderChips(id,arr,key){
-  $(id).innerHTML=arr.map((v,i)=>'<span class="chip">'+esc(v)+'<button type="button" aria-label="Remove" data-remove="'+key+'" data-index="'+i+'">×</button></span>').join('');
-}
-function renderAssets(){
-  $('assetList').innerHTML=state.assets.length?state.assets.map(a=>{
-    const t=state.assetTypes.find(x=>x.id===a.typeId);
-    const meta=Object.entries(a.meta||{}).filter(([,v])=>v).map(([k,v])=>k+': '+v).join(' · ');
-    return '<div class="asset-row"><div><b>'+esc(a.name)+'</b><small>'+esc((t?t.name:'Unknown type')+(meta?' · '+meta:''))+'</small></div><button class="row-delete" data-delete-asset="'+esc(a.id)+'">Remove</button></div>';
-  }).join(''):'<div class="empty">No assets registered yet.</div>';
-}
-function renderMetaFields(){
-  const t=state.assetTypes.find(x=>x.id===$('assetTypeSelect').value);
-  $('assetMetaFields').innerHTML=t?t.fields.map((f,i)=>'<label>'+esc(f)+'<input data-meta-index="'+i+'" placeholder="'+esc(f)+'"></label>').join(''):'';
-}
-function renderAssetProfiles(){
-  $('assetProfileCount').textContent=state.assets.length+" registered asset"+(state.assets.length===1?"":"s");
-  if(!state.assets.length){
-    $('assetProfiles').innerHTML='<div class="panel empty">No assets registered yet. A manager can add assets in Settings.</div>';
-    return;
-  }
-  $('assetProfiles').innerHTML=state.assets.map(a=>{
-    const t=state.assetTypes.find(x=>x.id===a.typeId);
-    const meta=Object.entries(a.meta||{}).filter(([,v])=>v);
-    return '<article class="asset-profile-card"><div class="asset-profile-head"><div><span class="asset-type">'+esc(t?.name||"Asset")+'</span><h3>'+esc(a.name)+'</h3></div></div>'+
-      '<div class="asset-meta">'+(meta.length?meta.map(([k,v])=>'<div><span>'+esc(k)+'</span><b>'+esc(v)+'</b></div>').join(''):'<span class="muted">No additional profile information.</span>')+'</div></article>';
-  }).join('');
-}
-function recordsTable(records){
-  if(!records.length)return '<div class="empty">No records yet.</div>';
-  return '<table><thead><tr><th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Reference / Sign</th></tr></thead><tbody>'+records.map(r=>{
-    const a=state.assets.find(x=>x.id===r.assetId);
-    const detail=r.kind==='usage'?r.item+' · '+r.qty+' '+r.unit:r.measure+' · '+r.qty;
-    const ref=r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):(r.job||r.remarks||'');
-    return '<tr><td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(detail)+'</td><td>'+esc(ref||'—')+'</td></tr>';
-  }).join('')+'</tbody></table>';
-}
-function renderRecords(){
-  const aid=$('recordAsset').value, kind=$('recordKind').value;
-  const rows=state.records.filter(r=>(!aid||r.assetId===aid)&&(!kind||r.kind===kind)).sort((a,b)=>b.date.localeCompare(a.date));
-  $('recordsTable').innerHTML=recordsTable(rows);
-}
 function reportRows(){
   return filteredRecords($('reportMonth').value,$('reportAsset').value,'').filter(r=>r.status!=='void');
 }
