@@ -115,13 +115,18 @@ function renderSelectors(){
   $('assetTypeSelect').innerHTML=optionList(state.assetTypes,'Select asset type',t=>({value:t.id,label:t.name}));
 }
 function renderDefinitions(){
-  $('assetTypeList').innerHTML=state.assetTypes.length?state.assetTypes.map(t=>'<div class="stack-row"><b>'+esc(t.name)+'</b><small>'+esc(t.fields.join(' · ')||'No metadata fields')+'</small></div>').join(''):'<div class="empty">No asset types yet.</div>';
+  $('assetTypeList').innerHTML=state.assetTypes.length?state.assetTypes.map(t=>
+    '<div class="stack-row editable-row"><div><b>'+esc(t.name)+'</b><small>'+esc(t.fields.join(' · ')||'No metadata fields')+'</small></div>'+
+    '<button type="button" class="edit-link" data-edit-type="'+esc(t.id)+'">Edit</button></div>'
+  ).join(''):'<div class="empty">No asset types yet.</div>';
   renderChips('itemList',state.items,'items');
   renderChips('unitList',state.units,'units');
   renderChips('measureList',state.measures,'measures');
 }
 function renderChips(id,arr,key){
-  $(id).innerHTML=arr.map((v,i)=>'<span class="chip">'+esc(v)+'<button type="button" aria-label="Remove" data-remove="'+key+'" data-index="'+i+'">×</button></span>').join('');
+  $(id).innerHTML=arr.map((v,i)=>
+    '<span class="chip editable-chip"><span>'+esc(v)+'</span><button type="button" class="edit-link" data-edit-simple="'+key+'" data-index="'+i+'">Edit</button></span>'
+  ).join('');
 }
 function renderAssets(){
   $('assetList').innerHTML=state.assets.length?state.assets.map(a=>{
@@ -308,8 +313,46 @@ $('measureForm').addEventListener('submit',e=>addSimple(e,'measureName','measure
 function addSimple(e,input,key){e.preventDefault();const v=$(input).value.trim();if(v&&!state[key].includes(v))state[key].push(v);e.target.reset();save()}
 
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-remove]');
-  if(b){state[b.dataset.remove].splice(Number(b.dataset.index),1);save()}
+  const typeBtn=e.target.closest('[data-edit-type]');
+  if(typeBtn){
+    const t=state.assetTypes.find(x=>x.id===typeBtn.dataset.editType);if(!t)return;
+    const name=prompt('Asset Type name',t.name);
+    if(name===null)return;
+    const cleanName=name.trim();
+    if(!cleanName)return alert('Asset Type name cannot be empty.');
+    const fieldsText=prompt('Metadata fields, comma separated',t.fields.join(', '));
+    if(fieldsText===null)return;
+    const newFields=fieldsText.split(',').map(x=>x.trim()).filter(Boolean);
+    const oldFields=[...t.fields];
+    state.assets.filter(a=>a.typeId===t.id).forEach(a=>{
+      const oldMeta=a.meta||{},next={};
+      newFields.forEach((field,i)=>{
+        const oldField=oldFields[i];
+        next[field]=oldField!==undefined?(oldMeta[oldField]??''):'';
+      });
+      a.meta=next;
+    });
+    t.name=cleanName;
+    t.fields=newFields;
+    save();
+    return;
+  }
+
+  const simpleBtn=e.target.closest('[data-edit-simple]');
+  if(simpleBtn){
+    const key=simpleBtn.dataset.editSimple,index=Number(simpleBtn.dataset.index);
+    const current=state[key]?.[index];
+    if(current===undefined)return;
+    const value=prompt('Edit '+(key==='items'?'Usage Item':key==='units'?'Unit':'Work Measure'),current);
+    if(value===null)return;
+    const clean=value.trim();
+    if(!clean)return alert('Value cannot be empty.');
+    if(state[key].some((v,i)=>i!==index&&v.toLowerCase()===clean.toLowerCase()))return alert('That value already exists.');
+    state[key][index]=clean;
+    save();
+    return;
+  }
+
   const a=e.target.closest('[data-delete-asset]');
   if(a){const id=a.dataset.deleteAsset;if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}state.assets=state.assets.filter(x=>x.id!==id);save()}
 });
