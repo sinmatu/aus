@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userData() {
+      return hasUserDoc()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    function isActive() {
+      return hasUserDoc() &&
+        userData().status == "active";
+    }
+
+    function role() {
+      return isActive() ? userData().role : null;
+    }
+
+    function isManager() {
+      return role() == "manager";
+    }
+
+    function isStaff() {
+      return role() == "staff";
+    }
+
+    function isStaffOrManager() {
+      return isManager() || isStaff();
+    }
+
+    // Manager: unrestricted access across AUS.
+    match /{document=**} {
+      allow read, write: if isManager();
+    }
+
+    // Registered account profile.
+    match /users/{uid} {
+      allow read: if signedIn() &&
+        request.auth.uid == uid;
+
+      allow create, delete: if false;
+
+      allow update: if signedIn() &&
+        request.auth.uid == uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    // Layer 1: system definitions.
+    match /assetTypes/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /usageItems/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /units/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /workMeasures/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Layer 2: registered assets.
+    match /assets/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Global settings.
+    match /settings/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Operational usage records.
+    match /usageRecords/{id} {
+      allow read: if isStaff();
+
+      allow create: if isStaff() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == "pending";
+
+      allow update: if isStaff();
+
+      allow delete: if false;
+    }
+
+    // Operational work records.
+    match /workRecords/{id} {
+      allow read: if isStaff();
+
+      allow create: if isStaff() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == "pending";
+
+      allow update: if isStaff();
+
+      allow delete: if false;
+    }
+
+    // Reconciliation / reporting periods.
+    match /reconciliationPeriods/{id} {
+      allow read, create, update: if isStaff();
+      allow delete: if false;
+    }
+  }
+}
