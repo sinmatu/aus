@@ -76,3 +76,10 @@
 @media(max-width:900px){
   .reports-head{align-items:flex-start;flex-direction:column}
 }
+
+.report-asset-group{padding:0 0 18px}
+.report-asset-group+.report-asset-group{border-top:1px solid #e5e7eb;padding-top:18px}
+.report-asset-group>h3{margin:0 0 12px;font-size:1.05rem}
+.report-kind-section{margin-top:12px}
+.report-kind-section h4{margin:0 0 8px;font-size:.9rem}
+.report-kind-section table{min-width:760px}
