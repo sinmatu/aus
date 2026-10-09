@@ -290,18 +290,25 @@ function updateBulkReview(){
     master.indeterminate=checked.length>0&&checked.length<boxes.length;
   }
 }
-function setRecordStatus(id,status){
+async function setRecordStatus(id,status){
   const r=state.records.find(x=>x.id===id); if(!r)return;
   r.status=status;
   r.reviewedBy=currentUser?.uid||'';
   r.reviewedAt=new Date().toISOString();
+  await persistRecord(r);
   save();
 }
-function markSelectedChecked(){
-  [...document.querySelectorAll('#recordsTable .record-select:checked')].forEach(x=>{
+async function markSelectedChecked(){
+  const selected=[...document.querySelectorAll('#recordsTable .record-select:checked')];
+  for(const x of selected){
     const r=state.records.find(v=>v.id===x.value);
-    if(r){r.status='checked';r.reviewedBy=currentUser?.uid||'';r.reviewedAt=new Date().toISOString()}
-  });
+    if(r){
+      r.status='checked';
+      r.reviewedBy=currentUser?.uid||'';
+      r.reviewedAt=new Date().toISOString();
+      await persistRecord(r);
+    }
+  }
   save();
 }
 function openCorrection(id){
@@ -316,7 +323,7 @@ function openCorrection(id){
   }
   $('correctionDialog').showModal();
 }
-function saveCorrection(e){
+async function saveCorrection(e){
   e.preventDefault();
   const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
   r.original=r.original||structuredClone(r);
@@ -326,6 +333,7 @@ function saveCorrection(e){
   r.correctedBy=currentUser?.uid||'';
   r.correctedAt=new Date().toISOString();
   r.status='checked';
+  await persistRecord(r);
   $('correctionDialog').close();
   save();
 }
