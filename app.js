@@ -1,3 +1,9 @@
+import { firebaseConfig } from "./firebase-config.js";
+
+const fb={};
+let currentUser=null;
+let currentRole="";
+
 const KEY='sinmatu-aus-v1';
 const defaults={
   assetTypes:[
@@ -18,6 +24,61 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
 const today=()=>new Date().toISOString().slice(0,10);
 $('usageDate').value=today(); $('workDate').value=today();
+
+function applyRoleUI(){
+  document.querySelectorAll('[data-role]').forEach(el=>{
+    const allowed=el.dataset.role.split(',').includes(currentRole);
+    el.classList.toggle('hidden',!allowed);
+  });
+}
+function showLogin(){
+  $('loginView').classList.remove('hidden');
+  $('shell').classList.add('hidden');
+  $('userArea').innerHTML='<span class="system-mark">AUS</span>';
+}
+function showShell(){
+  $('loginView').classList.add('hidden');
+  $('shell').classList.remove('hidden');
+  $('signedInName').textContent=currentUser?.displayName||currentUser?.email||'User';
+  $('roleBadge').textContent=currentRole?currentRole.charAt(0).toUpperCase()+currentRole.slice(1):'';
+  $('userArea').innerHTML='<strong>'+esc(currentUser?.displayName||currentUser?.email||'User')+'</strong>';
+  applyRoleUI();
+}
+async function initFirebase(){
+  const [A,U,F]=await Promise.all([
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js'),
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js')
+  ]);
+  const app=A.initializeApp(firebaseConfig);
+  fb.auth=U.getAuth(app); fb.db=F.getFirestore(app);
+  Object.assign(fb,U,F);
+  U.onAuthStateChanged(fb.auth,async user=>{
+    if(!user){currentUser=null;currentRole='';showLogin();return}
+    try{
+      const snap=await F.getDoc(F.doc(fb.db,'users',user.uid));
+      if(!snap.exists())throw Error('Account is not authorised for this system.');
+      const role=snap.data().role||'';
+      if(!['manager','staff'].includes(role))throw Error('Account role is missing or not authorised.');
+      currentUser=user; currentRole=role; showShell();
+    }catch(err){
+      $('loginError').textContent=err.message||'Account is not authorised.';
+      $('loginError').classList.remove('hidden');
+      await U.signOut(fb.auth);
+    }
+  });
+}
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault(); $('loginError').classList.add('hidden');
+  try{await fb.signInWithEmailAndPassword(fb.auth,$('loginEmail').value.trim(),$('loginPassword').value)}
+  catch(err){$('loginError').textContent='Sign in failed. Check your email and password.';$('loginError').classList.remove('hidden')}
+});
+$('googleLoginBtn').addEventListener('click',async()=>{
+  $('loginError').classList.add('hidden');
+  try{await fb.signInWithPopup(fb.auth,new fb.GoogleAuthProvider())}
+  catch(err){$('loginError').textContent='Google sign in failed.';$('loginError').classList.remove('hidden')}
+});
+$('signOutBtn').addEventListener('click',()=>fb.signOut(fb.auth));
 
 document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b===btn));
@@ -129,3 +190,9 @@ $('workForm').addEventListener('submit',e=>{
 });
 
 renderAll();
+showLogin();
+initFirebase().catch(err=>{
+  $('setupBanner').classList.remove('hidden');
+  $('setupBanner').textContent='Firebase startup error: '+(err.message||err);
+  showLogin();
+});
