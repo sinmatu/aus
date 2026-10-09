@@ -117,7 +117,8 @@ function renderSelectors(){
 function renderDefinitions(){
   $('assetTypeList').innerHTML=state.assetTypes.length?state.assetTypes.map(t=>
     '<div class="stack-row editable-row"><div><b>'+esc(t.name)+'</b><small>'+esc(t.fields.join(' · ')||'No metadata fields')+'</small></div>'+
-    '<button type="button" class="edit-link" data-edit-type="'+esc(t.id)+'">Edit</button></div>'
+    '<div class="definition-actions"><button type="button" class="edit-link" data-edit-type-name="'+esc(t.id)+'">Edit Name</button>'+
+    '<button type="button" class="edit-link" data-edit-type-meta="'+esc(t.id)+'">Edit Metadata</button></div></div>'
   ).join(''):'<div class="empty">No asset types yet.</div>';
   renderChips('itemList',state.items,'items');
   renderChips('unitList',state.units,'units');
@@ -313,26 +314,35 @@ $('measureForm').addEventListener('submit',e=>addSimple(e,'measureName','measure
 function addSimple(e,input,key){e.preventDefault();const v=$(input).value.trim();if(v&&!state[key].includes(v))state[key].push(v);e.target.reset();save()}
 
 document.addEventListener('click',e=>{
-  const typeBtn=e.target.closest('[data-edit-type]');
-  if(typeBtn){
-    const t=state.assetTypes.find(x=>x.id===typeBtn.dataset.editType);if(!t)return;
+  const nameBtn=e.target.closest('[data-edit-type-name]');
+  if(nameBtn){
+    const t=state.assetTypes.find(x=>x.id===nameBtn.dataset.editTypeName);if(!t)return;
     const name=prompt('Asset Type name',t.name);
     if(name===null)return;
     const cleanName=name.trim();
     if(!cleanName)return alert('Asset Type name cannot be empty.');
-    const fieldsText=prompt('Metadata fields, comma separated',t.fields.join(', '));
+    t.name=cleanName;
+    save();
+    return;
+  }
+
+  const metaBtn=e.target.closest('[data-edit-type-meta]');
+  if(metaBtn){
+    const t=state.assetTypes.find(x=>x.id===metaBtn.dataset.editTypeMeta);if(!t)return;
+    const fieldsText=prompt('Metadata fields for '+t.name+' (comma separated)',t.fields.join(', '));
     if(fieldsText===null)return;
     const newFields=fieldsText.split(',').map(x=>x.trim()).filter(Boolean);
+    if(!newFields.length)return alert('Add at least one metadata field.');
     const oldFields=[...t.fields];
     state.assets.filter(a=>a.typeId===t.id).forEach(a=>{
       const oldMeta=a.meta||{},next={};
       newFields.forEach((field,i)=>{
+        const sameNameValue=oldMeta[field];
         const oldField=oldFields[i];
-        next[field]=oldField!==undefined?(oldMeta[oldField]??''):'';
+        next[field]=sameNameValue!==undefined?sameNameValue:(oldField!==undefined?(oldMeta[oldField]??''):'');
       });
       a.meta=next;
     });
-    t.name=cleanName;
     t.fields=newFields;
     save();
     return;
