@@ -263,6 +263,7 @@ function renderAssetProfiles(){
   }).join('');
 }
 function recordDetail(r){
+  if(r.status==='pending_details')return r.kind==='usage'?r.item+' · Quantity pending':'Work quantity pending';
   return r.kind==='usage'?(r.trackQuantity===false?r.item:r.item+' · '+r.qty+' '+r.unit):r.qty+' '+r.measure;
 }
 function recordReference(r){
@@ -273,21 +274,23 @@ function recordsTable(records){
   if(!records.length)return '<div class="empty">No matching records.</div>';
   const manager=currentRole==='manager';
   const selectHead=manager?'<th class="select-col"><input id="selectVisibleRecords" type="checkbox" aria-label="Select reviewable records"></th>':'';
-  const reviewHead=manager?'<th>Review</th>':'';
+  const reviewHead=manager?'<th>Review</th>':'<th>Actions</th>';
   return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th><th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
     const status=r.status||'pending';
-    const reviewable=status!=='checked'&&status!=='void';
+    const reviewable=status!=='checked'&&status!=='void'&&status!=='pending_details';
     const selectCell=manager?'<td class="select-col">'+(reviewable?'<input class="record-select" type="checkbox" value="'+esc(r.id)+'">':'')+'</td>':'';
     let reviewCell='';
     if(manager){
-      const checked=status==='checked'?'':'<button class="record-action" data-status="checked">Mark Checked</button>';
-      const correct='<button class="record-action" data-correct="1">Correct Entry</button>';
-      const correction=status==='correction'?'':'<button class="record-action" data-status="correction">Correction Required</button>';
+      const checked=status==='checked'||status==='pending_details'?'':'<button class="record-action" data-status="checked">Mark Checked</button>';
+      const correct=status==='pending_details'?'':'<button class="record-action" data-correct="1">Correct Entry</button>';
+      const correction=status==='correction'||status==='pending_details'?'':'<button class="record-action" data-status="correction">Correction Required</button>';
       const voidBtn='<button class="record-action danger-link" data-status="void">Void Entry</button>';
       reviewCell='<td><div class="record-actions">'+checked+correct+correction+voidBtn+'</div></td>';
     }
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+reviewCell+'</tr>';
+    const canComplete=status==='pending_details'&&(currentRole==='manager'||r.createdBy===currentUser?.uid);
+    const completion=canComplete?'<button type="button" class="record-action" data-complete="1">Complete Entry</button>':'';
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
@@ -314,7 +317,7 @@ function updateBulkReview(){
 }
 async function setRecordStatus(id,status){
  if(currentRole!=='manager')return;
- const r=state.records.find(x=>x.id===id);if(!r)return;
+ const r=state.records.find(x=>x.id===id);if(!r||r.status==='pending_details'&&status==='checked')return;
  const next={...r,status,reviewedBy:currentUser.uid,reviewedAt:new Date().toISOString()};
  await persistRecord(next);await refreshServerState();
 }
@@ -353,7 +356,7 @@ function reportRows(){
   return state.records
     .filter(r=>(!$('reportMonth').value||r.date.startsWith($('reportMonth').value)))
     .filter(r=>(!$('reportAsset').value||r.assetId===$('reportAsset').value))
-    .filter(r=>r.status!=='void')
+    .filter(r=>r.status!=='void'&&r.status!=='pending_details')
     .filter(r=>!item||(r.kind==='usage'&&r.item===item));
 }
 function reportAssetGroups(records){
@@ -488,9 +491,9 @@ function stockSummaryData(){
  return state.items.filter(i=>i.trackQuantity!==false).map(i=>{
   const item=itemName(i),unit=i.unit;
   const ins=state.movements.filter(m=>m.type==='in'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
-  const directIns=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.receivedQty||0),0);
-  const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.qty||0),0);
-  const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
+  const directIns=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.receivedQty||0),0);
+  const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.qty||0),0);
+  const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
   const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
   return {item,unit,ins:ins+directIns,outs,balance:ins+directIns-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
  });
@@ -501,12 +504,12 @@ function renderStockReports(){
  // Balances are all-time; movement quantities respect the selected month.
  const tbody=filtered.map(x=>{
  const movementIns=state.movements.filter(m=>m.type==='in'&&m.item===x.item&&(!month||m.date.startsWith(month))).reduce((n,m)=>n+Number(m.qty),0);
- const ins=movementIns+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.receivedQty||0),0);
- const outs=state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
+ const ins=movementIns+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.receivedQty||0),0);
+ const outs=state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
  const periodStart=month?month+'-01':'';
- const opening=periodStart?(state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.receivedQty||0),0))-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
+ const opening=periodStart?(state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.receivedQty||0),0))-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
  // With an asset filter, show quantities for that asset, but don't label the warehouse balance as an asset balance.
- const stockBalance=$('reportAsset').value?'—':opening+ins-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
+ const stockBalance=$('reportAsset').value?'—':opening+ins-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
  return '<tr><td>'+esc(x.item)+'</td><td>'+esc(x.unit)+'</td><td>'+($('reportAsset').value?'—':opening)+'</td><td>'+ins+'</td><td>'+outs+'</td><td>'+stockBalance+'</td></tr>';
  }).join('');
  $('stockSummary').innerHTML='<table><thead><tr><th>Item</th><th>Unit</th><th>Opening</th><th>In</th><th>Usage Out</th><th>Closing</th></tr></thead><tbody>'+tbody+'</tbody></table>';
@@ -529,10 +532,37 @@ $('recordsTable').addEventListener('click',e=>{
   if(e.target.id==='selectVisibleRecords'){document.querySelectorAll('#recordsTable .record-select').forEach(x=>x.checked=e.target.checked);updateBulkReview();return}
   if(e.target.classList.contains('record-select')){updateBulkReview();return}
   const row=e.target.closest('tr[data-record-id]');if(!row)return;
+  if(e.target.closest('[data-complete]')){openCompletion(row.dataset.recordId);return}
   if(e.target.closest('[data-correct]')){openCorrection(row.dataset.recordId);return}
   const statusBtn=e.target.closest('[data-status]');if(statusBtn)setRecordStatus(row.dataset.recordId,statusBtn.dataset.status);
 });
 $('markSelectedChecked').addEventListener('click',markSelectedChecked);
+
+let completingId='';
+function openCompletion(id){
+ const r=state.records.find(x=>x.id===id);
+ if(!r||r.status!=='pending_details'||!(currentRole==='manager'||r.createdBy===currentUser?.uid))return;
+ completingId=id;
+ $('completeDescription').textContent=(r.kind==='usage'?r.item:'Work')+' · '+r.date;
+ $('completeUnitLabel').textContent=r.kind==='usage'?'Unit: '+r.unit:'Measure: '+r.measure;
+ $('completeQty').value='';
+ $('completeDialog').showModal();
+}
+$('completeCancel').addEventListener('click',()=>$('completeDialog').close());
+$('completeForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const r=state.records.find(x=>x.id===completingId),qty=Number($('completeQty').value);
+ if(!r||r.status!=='pending_details'||!(currentRole==='manager'||r.createdBy===currentUser?.uid))return;
+ if(!Number.isFinite(qty)||qty<=0)return notify('Enter a positive quantity.');
+ const next={...r,qty,status:'pending',completedBy:currentUser.uid,completedAt:new Date().toISOString()};
+ if(r.kind==='usage'){
+  next.receivedQty=r.stockSource==='immediate'?qty:0;
+  next.recoveredQty=itemRecoverable(r.item)?qty:0;
+ }
+ await persistRecord(next);
+ $('completeDialog').close();await refreshServerState();notify('Entry completed and awaiting Manager review.');
+});
+
 $('correctionForm').addEventListener('submit',saveCorrection);
 $('correctionClose').addEventListener('click',()=>$('correctionDialog').close());
 $('correctionCancel').addEventListener('click',()=>$('correctionDialog').close());
@@ -655,25 +685,28 @@ $('assetForm').addEventListener('submit',async e=>{
 });
 $('usageForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const item=$('usageItem').value,qty=Number($('usageQty').value),unit=itemUnit(item);
+  const item=$('usageItem').value,qtyText=$('usageQty').value,qty=qtyText===''?null:Number(qtyText),unit=itemUnit(item);
   const measured=itemMeasured(item);
-  if(measured&&(!unit||!Number.isFinite(qty)||qty<=0))return notify('Select a configured item and positive quantity.');
+  if(measured&&(!unit||(qty!==null&&(!Number.isFinite(qty)||qty<=0))))return notify('Select a configured item and positive quantity.');
   if(!measured&&!$('usageRemarks').value.trim())return notify('Purpose / Remarks is required for non-quantity items.');
-  const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
-  if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return notify('Recovered quantity must be between zero and usage quantity.');
+  const incomplete=measured&&qty===null;
+  const returned=!incomplete&&itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
+  if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||(!incomplete&&returned>qty))return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
   const immediate=measured&&$('usageSource').value==='immediate';
-  const receivedQty=immediate?qty:0;
+  const receivedQty=immediate&&!incomplete?qty:0;
   const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
-  if(measured&&qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  if(measured&&!incomplete&&qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:incomplete?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('usageDate').value=today();syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),operator:$('workPerformedBy').value.trim(),supervisor:$('workSupervisor').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const workQty=$('workQty').value===''?null:Number($('workQty').value);
+  if(workQty!==null&&(!Number.isFinite(workQty)||workQty<=0))return notify('Enter a positive quantity or leave it blank.');
+  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:workQty,job:$('workJob').value.trim(),operator:$('workPerformedBy').value.trim(),supervisor:$('workSupervisor').value.trim(),remarks:$('workRemarks').value.trim(),status:workQty===null?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
