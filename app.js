@@ -9,16 +9,21 @@ const defaults={
     {id:'type-lorry',name:'Lorry',fields:['Plate Number','Make / Model']},
     {id:'type-machine',name:'Machine',fields:['Machine ID','Make / Model']}
   ],
-  items:['Fuel','Battery','Hydraulic','Rimula'],
+  items:[{name:'Diesel',unit:'litre',recoverable:false},{name:'Battery',unit:'pc',recoverable:true},{name:'Battery Liquid',unit:'litre',recoverable:false},{name:'Rimula',unit:'litre',recoverable:false},{name:'Hydraulic Oil',unit:'litre',recoverable:false}],
   units:['drum','litre','pc'],
   measures:['hour','trip','km','load','tonne'],
   assets:[],
-  records:[]
+  records:[],
+  movements:[]
 };
 let state=structuredClone(defaults);
 function save(){
   renderAll();
 }
+const itemName=i=>typeof i==='string'?i:i.name;
+const itemConfig=name=>state.items.find(i=>itemName(i)===name);
+const itemUnit=name=>itemConfig(name)?.unit||'';
+const itemRecoverable=name=>!!itemConfig(name)?.recoverable;
 function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
 async function persistSettings(){
   await fb.setDoc(fb.doc(fb.db,'settings','global'),{
@@ -43,20 +48,23 @@ async function persistRecord(r){
   const data={...r};delete data.id;delete data.kind;
   await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data,{merge:true});
 }
+async function persistMovement(m){const data={...m};delete data.id;await fb.setDoc(fb.doc(fb.db,'stockMovements',m.id),data)}
 async function loadFirebaseState(){
-  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap]=await Promise.all([
+  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
     fb.getDocs(fb.collection(fb.db,'assetTypes')),
     fb.getDocs(fb.collection(fb.db,'assets')),
     fb.getDocs(fb.collection(fb.db,'usageRecords')),
     fb.getDocs(fb.collection(fb.db,'workRecords')),
-    fb.getDoc(fb.doc(fb.db,'settings','global'))
+    fb.getDoc(fb.doc(fb.db,'settings','global')),
+    fb.getDocs(fb.collection(fb.db,'stockMovements'))
   ]);
   state={
     assetTypes:typeSnap.docs.map(d=>({id:d.id,...d.data()})),
-    items:settingsSnap.exists()&&Array.isArray(settingsSnap.data().items)?settingsSnap.data().items:[],
+    items:settingsSnap.exists()&&Array.isArray(settingsSnap.data().items)?settingsSnap.data().items.map(i=>typeof i==='string'?{name:i,unit:'',recoverable:false}:i):[],
     units:settingsSnap.exists()&&Array.isArray(settingsSnap.data().units)?settingsSnap.data().units:[],
     measures:settingsSnap.exists()&&Array.isArray(settingsSnap.data().measures)?settingsSnap.data().measures:[],
     assets:assetSnap.docs.map(d=>({id:d.id,...d.data()})),
+    movements:movementSnap.docs.map(d=>({id:d.id,...d.data()})),
     records:[
       ...usageSnap.docs.map(d=>({id:d.id,kind:'usage',...d.data()})),
       ...workSnap.docs.map(d=>({id:d.id,kind:'work',...d.data()}))
@@ -72,7 +80,7 @@ async function seedFirebaseDefaults(){
   const settingsRef=fb.doc(fb.db,'settings','global');
   const settingsSnap=await fb.getDoc(settingsRef);
   if(!settingsSnap.exists()){
-    state.items=[...defaults.items];state.units=[...defaults.units];state.measures=[...defaults.measures];
+    state.items=structuredClone(defaults.items);state.units=[...defaults.units];state.measures=[...defaults.measures];
     await persistSettings();
   }
 }
@@ -81,7 +89,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
 const today=()=>new Date().toISOString().slice(0,10);
-$('usageDate').value=today(); $('workDate').value=today();
+$('usageDate').value=today(); $('workDate').value=today();$('stockDate').value=today();$('recoveryDate').value=today();
 const currentMonth=today().slice(0,7);
 $('recordMonth').value=currentMonth;
 $('reportMonth').value=currentMonth;
@@ -171,9 +179,12 @@ function renderSelectors(){
   const allAssets='<option value="">All Assets</option>'+state.assets.map(a=>'<option value="'+esc(a.id)+'">'+esc(assetLabel(a))+'</option>').join('');
   $('recordAsset').innerHTML=allAssets;
   $('reportAsset').innerHTML=allAssets;
-  $('reportItem').innerHTML='<option value="">All Items</option>'+state.items.map(i=>'<option value="'+esc(i)+'">'+esc(i)+'</option>').join('');
-  $('usageItem').innerHTML=optionList(state.items,'Select item');
-  $('usageUnit').innerHTML=optionList(state.units,'Select unit');
+  $('reportItem').innerHTML='<option value="">All Items</option>'+state.items.map(i=>'<option value="'+esc(itemName(i))+'">'+esc(itemName(i))+'</option>').join('');
+  $('usageItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
+  syncUsageItem();
+  $('stockItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
+  $('recoveryItem').innerHTML=optionList(state.items.filter(i=>i.recoverable),'Select recovered item',i=>({value:itemName(i),label:itemName(i)}));
+  $('usageUnit').value=itemUnit($('usageItem').value);
   $('workMeasure').innerHTML=optionList(state.measures,'Select measure');
   $('assetTypeSelect').innerHTML=optionList(state.assetTypes,'Select asset type',t=>({value:t.id,label:t.name}));
 }
@@ -183,7 +194,7 @@ function renderDefinitions(){
     '<div class="definition-actions"><button type="button" class="edit-link" data-edit-type-name="'+esc(t.id)+'">Edit Name</button>'+
     '<button type="button" class="edit-link" data-edit-type-meta="'+esc(t.id)+'">Edit Metadata</button></div></div>'
   ).join(''):'<div class="empty">No asset types yet.</div>';
-  renderChips('itemList',state.items,'items');
+  $('itemList').innerHTML=state.items.map((i,index)=>'<div class="stack-row editable-row"><div><b>'+esc(itemName(i))+'</b><small>'+esc(i.unit||'Unit not set')+(i.recoverable?' · Recovery enabled':'')+'</small></div><button type="button" class="edit-link" data-edit-item="'+index+'">Edit</button></div>').join('');
   renderChips('unitList',state.units,'units');
   renderChips('measureList',state.measures,'measures');
 }
@@ -293,7 +304,7 @@ function openCorrection(id){
   $('correctionOriginal').textContent=(r.kind==='usage'?'Usage':'Work')+' · '+r.date+' · '+recordDetail(r);
   $('correctionNote').value=r.correctionNote||'';
   if(r.kind==='usage'){
-    $('correctionFields').innerHTML='<div class="grid three"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Unit<select id="correctUnit">'+state.units.map(u=>'<option '+(u===r.unit?'selected':'')+'>'+esc(u)+'</option>').join('')+'</select></label><label>Item<select id="correctItem">'+state.items.map(i=>'<option '+(i===r.item?'selected':'')+'>'+esc(i)+'</option>').join('')+'</select></label></div>';
+    $('correctionFields').innerHTML='<div class="grid three"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Unit<select id="correctUnit">'+state.units.map(u=>'<option '+(u===r.unit?'selected':'')+'>'+esc(u)+'</option>').join('')+'</select></label><label>Item<select id="correctItem">'+state.items.map(i=>'<option '+(itemName(i)===r.item?'selected':'')+'>'+esc(itemName(i))+'</option>').join('')+'</select></label></div>';
   }else{
     $('correctionFields').innerHTML='<div class="grid two"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label></div>';
   }
@@ -304,7 +315,7 @@ async function saveCorrection(e){
   const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
   r.original=r.original||structuredClone(r);
   r.qty=Number($('correctQty').value);
-  if(r.kind==='usage'){r.unit=$('correctUnit').value;r.item=$('correctItem').value}else r.measure=$('correctMeasure').value;
+  if(r.kind==='usage'){r.item=$('correctItem').value;r.unit=itemUnit(r.item)}else r.measure=$('correctMeasure').value;
   r.correctionNote=$('correctionNote').value.trim();
   r.correctedBy=currentUser?.uid||'';
   r.correctedAt=new Date().toISOString();
@@ -367,6 +378,7 @@ function renderReports(){
   const assetCount=new Set(rows.map(r=>r.assetId)).size;
   $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Assets involved</span><b>'+assetCount+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div></div>';
   $('reportTable').innerHTML=reportTable(rows);
+  renderStockReports();
 }
 function reportMatrix(){
   const rows=reportRows();
@@ -413,7 +425,59 @@ async function exportPdf(){
 $('exportExcel').addEventListener('click',exportExcel);
 $('exportPdf').addEventListener('click',exportPdf);
 
-function renderAll(){renderSelectors();renderDefinitions();renderAssets();renderMetaFields();renderAssetProfiles();renderRecords();renderReports()}
+
+function syncUsageItem(){
+ const name=$('usageItem').value;$('usageUnit').value=itemUnit(name);
+ const active=itemRecoverable(name);$('usageRecovery').classList.toggle('hidden',!active);
+ $('usageRecoveredQty').value=active?String(Number($('usageQty').value)||0):'0';
+}
+$('usageItem').addEventListener('change',syncUsageItem);
+$('usageQty').addEventListener('input',()=>{if(itemRecoverable($('usageItem').value))$('usageRecoveredQty').value=String(Number($('usageQty').value)||0)});
+$('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('stockItem').value)});
+async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);state.movements.push(m);save()}
+$('stockForm').addEventListener('submit',async e=>{
+ e.preventDefault();const item=$('stockItem').value,qty=Number($('stockQty').value),unit=itemUnit(item);
+ if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Item and positive quantity required.');
+ await createMovement({type:'in',item,unit,qty,date:$('stockDate').value,remarks:$('stockRemarks').value.trim()});e.target.reset();$('stockDate').value=today();alert('Stock received.');
+});
+$('recoveryForm').addEventListener('submit',async e=>{
+ e.preventDefault();const item=$('recoveryItem').value,qty=Number($('recoveryQty').value);
+ if(!itemRecoverable(item)||!Number.isInteger(qty)||qty<=0)return alert('Choose a recoverable item and whole quantity.');
+ const balance=stockSummaryData().find(x=>x.item===item)?.recoveredBalance||0;
+ if(qty>balance)return alert('Insufficient recovered stock ('+balance+' available).');
+ await createMovement({type:'recovered-out',item,unit:itemUnit(item),qty,date:$('recoveryDate').value,reason:$('recoveryReason').value,remarks:$('recoveryRemarks').value.trim()});e.target.reset();$('recoveryDate').value=today();alert('Recovered stock out saved.');
+});
+function stockSummaryData(){
+ return state.items.map(i=>{
+  const item=itemName(i),unit=i.unit;
+  const ins=state.movements.filter(m=>m.type==='in'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
+  const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.qty||0),0);
+  const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
+  const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
+  return {item,unit,ins,outs,balance:ins-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
+ });
+}
+function renderStockReports(){
+ const data=stockSummaryData(),month=$('reportMonth').value,chosen=$('reportItem').value;
+ const filtered=data.filter(x=>!chosen||x.item===chosen);
+ // Balances are all-time; movement quantities respect the selected month.
+ const tbody=filtered.map(x=>{
+ const ins=state.movements.filter(m=>m.type==='in'&&m.item===x.item&&(!month||m.date.startsWith(month))).reduce((n,m)=>n+Number(m.qty),0);
+ const outs=state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
+ const periodStart=month?month+'-01':'';
+ const opening=periodStart?state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
+ // With an asset filter, show quantities for that asset, but don't label the warehouse balance as an asset balance.
+ const stockBalance=$('reportAsset').value?'—':opening+ins-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
+ return '<tr><td>'+esc(x.item)+'</td><td>'+esc(x.unit)+'</td><td>'+($('reportAsset').value?'—':opening)+'</td><td>'+ins+'</td><td>'+outs+'</td><td>'+stockBalance+'</td></tr>';
+ }).join('');
+ $('stockSummary').innerHTML='<table><thead><tr><th>Item</th><th>Unit</th><th>Opening</th><th>In</th><th>Usage Out</th><th>Closing</th></tr></thead><tbody>'+tbody+'</tbody></table>';
+ $('recoverySummary').innerHTML='<table><thead><tr><th>Recovered Item</th><th>Unit</th><th>Total In</th><th>Total Out</th><th>Balance</th></tr></thead><tbody>'+filtered.filter(x=>x.recoverable).map(x=>'<tr><td>'+esc(x.item)+'</td><td>'+esc(x.unit)+'</td><td>'+x.recoveredIn+'</td><td>'+x.recoveredOut+'</td><td>'+x.recoveredBalance+'</td></tr>').join('')+'</tbody></table><p class="muted">Recovered totals are all-time warehouse balances.</p>';
+}
+function renderMovementHistory(){
+ $('movementTable').innerHTML='<table><thead><tr><th>Date</th><th>Movement</th><th>Item</th><th>Quantity</th><th>Remarks</th></tr></thead><tbody>'+state.movements.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(m=>'<tr><td>'+esc(m.date)+'</td><td>'+esc(m.type==='in'?'Stock In':'Recovered Out · '+(m.reason||''))+'</td><td>'+esc(m.item)+'</td><td>'+esc(m.qty+' '+m.unit)+'</td><td class="remarks-cell">'+esc(m.remarks||'—')+'</td></tr>').join('')+'</tbody></table>';
+}
+
+function renderAll(){renderSelectors();renderDefinitions();renderAssets();renderMetaFields();renderAssetProfiles();renderRecords();renderReports();renderMovementHistory();$('itemUnit').innerHTML=optionList(state.units,'Select unit')}
 
 $('assetTypeSelect').addEventListener('change',renderMetaFields);
 $('recordApply').addEventListener('click',renderRecords);
@@ -444,7 +508,12 @@ $('assetTypeForm').addEventListener('submit',async e=>{
   e.target.reset();
   save();
 });
-$('itemForm').addEventListener('submit',e=>addSimple(e,'itemName','items'));
+$('itemForm').addEventListener('submit',async e=>{
+  e.preventDefault();const name=$('itemName').value.trim(),unit=$('itemUnit').value;
+  if(!name||!unit)return alert('Name and unit are required.');
+  if(state.items.some(i=>itemName(i).toLowerCase()===name.toLowerCase()))return alert('Item already exists.');
+  state.items.push({name,unit,recoverable:$('itemRecoverable').checked});await persistSettings();e.target.reset();save();
+});
 $('unitForm').addEventListener('submit',e=>addSimple(e,'unitName','units'));
 $('measureForm').addEventListener('submit',e=>addSimple(e,'measureName','measures'));
 async function addSimple(e,input,key){
@@ -496,6 +565,18 @@ document.addEventListener('click',async e=>{
     return;
   }
 
+  const itemBtn=e.target.closest('[data-edit-item]');
+  if(itemBtn){const i=state.items[Number(itemBtn.dataset.editItem)];if(!i)return;
+    const name=prompt('Item name',itemName(i));if(name===null||!name.trim())return;
+    if(name.trim()!==itemName(i)&&state.items.some(j=>itemName(j).toLowerCase()===name.trim().toLowerCase()))return alert('Item already exists.');
+    const hasHistory=state.records.some(r=>r.item===itemName(i))||state.movements.some(m=>m.item===itemName(i));
+    if(hasHistory&&(name.trim()!==itemName(i)))return alert('Item name is locked once transactions exist.');
+    const unit=prompt('Unit (must already exist in Units settings)',i.unit||'');if(unit===null)return;
+    if(!state.units.includes(unit.trim()))return alert('Choose an existing unit.');
+    if(hasHistory&&unit.trim()!==i.unit)return alert('Unit is locked after transactions exist.');
+    const recoverable=confirm('Enable recovered-item tracking for '+name.trim()+'?\nOK = Yes, Cancel = No');
+    i.name=name.trim();i.unit=unit.trim();i.recoverable=recoverable;await persistSettings();save();return;
+  }
   const simpleBtn=e.target.closest('[data-edit-simple]');
   if(simpleBtn){
     const key=simpleBtn.dataset.editSimple,index=Number(simpleBtn.dataset.index);
@@ -506,6 +587,7 @@ document.addEventListener('click',async e=>{
     const clean=value.trim();
     if(!clean)return alert('Value cannot be empty.');
     if(state[key].some((v,i)=>i!==index&&v.toLowerCase()===clean.toLowerCase()))return alert('That value already exists.');
+    if(key==='units'&&state.items.some(i=>i.unit===current))return alert('Unit is assigned to an item. Edit items first.');
     state[key][index]=clean;
     await persistSettings();
     save();
@@ -534,10 +616,14 @@ $('assetForm').addEventListener('submit',async e=>{
 });
 $('usageForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item:$('usageItem').value,qty:Number($('usageQty').value),unit:$('usageUnit').value,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const item=$('usageItem').value,qty=Number($('usageQty').value),unit=itemUnit(item);
+  if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Select a configured item and positive quantity.');
+  const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
+  if(returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   state.records.push(r);
-  e.target.reset(); $('usageDate').value=today(); save(); alert('Usage record saved.');
+  e.target.reset(); $('usageDate').value=today(); syncUsageItem();save(); alert('Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
