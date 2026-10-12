@@ -111,10 +111,16 @@ async function initFirebase(){
       if(!['manager','staff'].includes(role))throw Error('Account role is missing or not authorised.');
       if(status!=='active')throw Error('Account is not active.');
       currentUser=user; currentRole=role;
-      await seedFirebaseDefaults();
-      await loadFirebaseState();
-      save();
       showShell();
+      try {
+        await loadFirebaseState();
+        save();
+        $('setupBanner').classList.add('hidden');
+      } catch (loadErr) {
+        $('setupBanner').textContent='Signed in, but server data could not load: '+(loadErr.message||loadErr)+'. Check Firebase rules and connection.';
+        $('setupBanner').classList.remove('hidden');
+        document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=true);
+      }
     }catch(err){
       $('loginError').textContent=err.message||'Account is not authorised.';
       $('loginError').classList.remove('hidden');
