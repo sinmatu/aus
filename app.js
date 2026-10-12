@@ -65,6 +65,26 @@ async function seedFirebaseDefaults(){
 }
 
 const $=id=>document.getElementById(id);
+
+function notify(message){
+ const el=$('ausNotice');el.textContent=String(message);el.classList.remove('hidden');
+ clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.classList.add('hidden'),5500);
+}
+function uiDialog(title,value='',confirmOnly=false){
+ return new Promise(resolve=>{
+  const overlay=$('ausModal'),form=$('ausModalForm'),field=$('ausModalInput');
+  $('ausModalTitle').textContent=title;
+  field.value=String(value);field.classList.toggle('hidden',confirmOnly);
+  overlay.classList.remove('hidden');
+  const finish=result=>{overlay.classList.add('hidden');form.onsubmit=null;$('ausModalCancel').onclick=null;resolve(result)};
+  form.onsubmit=e=>{e.preventDefault();finish(confirmOnly?true:field.value)};
+  $('ausModalCancel').onclick=()=>finish(confirmOnly?false:null);
+  if(!confirmOnly)field.focus();
+ });
+}
+const uiPrompt=(title,value)=>uiDialog(title,value,false);
+const uiConfirm=title=>uiDialog(title,'',true);
+
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
 const today=()=>new Date().toISOString().slice(0,10);
@@ -295,11 +315,11 @@ async function saveCorrection(e){
  e.preventDefault();if(currentRole!=='manager')return;
  const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
  const next={...r,original:r.original||structuredClone(r),qty:Number($('correctQty').value),correctionNote:$('correctionNote').value.trim(),correctedBy:currentUser.uid,correctedAt:new Date().toISOString(),status:'checked'};
- if(!Number.isFinite(next.qty)||next.qty<=0)return alert('Quantity must be positive.');
+ if(!Number.isFinite(next.qty)||next.qty<=0)return notify('Quantity must be positive.');
  if(r.kind==='usage'){
   next.item=$('correctItem').value;next.unit=itemUnit(next.item);
   next.recoveredQty=itemRecoverable(next.item)?Number($('correctRecovered')?.value||0):0;
-  if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>next.qty)return alert('Invalid recovered quantity.');
+  if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>next.qty)return notify('Invalid recovered quantity.');
  }else next.measure=$('correctMeasure').value;
  await persistRecord(next);$('correctionDialog').close();await refreshServerState();
 }
@@ -420,15 +440,15 @@ $('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('s
 async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);await refreshServerState()}
 $('stockForm').addEventListener('submit',async e=>{
  e.preventDefault();const item=$('stockItem').value,qty=Number($('stockQty').value),unit=itemUnit(item);
- if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Item and positive quantity required.');
- await createMovement({type:'in',item,unit,qty,date:$('stockDate').value,remarks:$('stockRemarks').value.trim()});e.target.reset();$('stockDate').value=today();alert('Stock received.');
+ if(!unit||!Number.isFinite(qty)||qty<=0)return notify('Item and positive quantity required.');
+ await createMovement({type:'in',item,unit,qty,date:$('stockDate').value,remarks:$('stockRemarks').value.trim()});e.target.reset();$('stockDate').value=today();notify('Stock received.');
 });
 $('recoveryForm').addEventListener('submit',async e=>{
  e.preventDefault();const item=$('recoveryItem').value,qty=Number($('recoveryQty').value);
- if(!itemRecoverable(item)||!Number.isInteger(qty)||qty<=0)return alert('Choose a recoverable item and whole quantity.');
+ if(!itemRecoverable(item)||!Number.isInteger(qty)||qty<=0)return notify('Choose a recoverable item and whole quantity.');
  const balance=stockSummaryData().find(x=>x.item===item)?.recoveredBalance||0;
- if(qty>balance)return alert('Insufficient recovered stock ('+balance+' available).');
- await createMovement({type:'recovered-out',item,unit:itemUnit(item),qty,date:$('recoveryDate').value,reason:$('recoveryReason').value,remarks:$('recoveryRemarks').value.trim()});e.target.reset();$('recoveryDate').value=today();alert('Recovered stock out saved.');
+ if(qty>balance)return notify('Insufficient recovered stock ('+balance+' available).');
+ await createMovement({type:'recovered-out',item,unit:itemUnit(item),qty,date:$('recoveryDate').value,reason:$('recoveryReason').value,remarks:$('recoveryRemarks').value.trim()});e.target.reset();$('recoveryDate').value=today();notify('Recovered stock out saved.');
 });
 function stockSummaryData(){
  return state.items.map(i=>{
@@ -493,8 +513,8 @@ $('assetTypeForm').addEventListener('submit',async e=>{
 });
 $('itemForm').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('itemName').value.trim(),unit=$('itemUnit').value;
-  if(!name||!unit)return alert('Name and unit are required.');
-  if(state.items.some(i=>itemName(i).toLowerCase()===name.toLowerCase()))return alert('Item already exists.');
+  if(!name||!unit)return notify('Name and unit are required.');
+  if(state.items.some(i=>itemName(i).toLowerCase()===name.toLowerCase()))return notify('Item already exists.');
   state.items.push({name,unit,recoverable:$('itemRecoverable').checked});await persistSettings();e.target.reset();save();
 });
 $('unitForm').addEventListener('submit',e=>addSimple(e,'unitName','units'));
@@ -514,10 +534,10 @@ document.addEventListener('click',async e=>{
   const nameBtn=e.target.closest('[data-edit-type-name]');
   if(nameBtn){
     const t=state.assetTypes.find(x=>x.id===nameBtn.dataset.editTypeName);if(!t)return;
-    const name=prompt('Asset Type name',t.name);
+    const name=await uiPrompt('Asset Type name',t.name);
     if(name===null)return;
     const cleanName=name.trim();
-    if(!cleanName)return alert('Asset Type name cannot be empty.');
+    if(!cleanName)return notify('Asset Type name cannot be empty.');
     t.name=cleanName;
     await persistAssetType(t);
     save();
@@ -527,10 +547,10 @@ document.addEventListener('click',async e=>{
   const metaBtn=e.target.closest('[data-edit-type-meta]');
   if(metaBtn){
     const t=state.assetTypes.find(x=>x.id===metaBtn.dataset.editTypeMeta);if(!t)return;
-    const fieldsText=prompt('Metadata fields for '+t.name+' (comma separated)',t.fields.join(', '));
+    const fieldsText=await uiPrompt('Metadata fields for '+t.name+' (comma separated)',t.fields.join(', '));
     if(fieldsText===null)return;
     const newFields=fieldsText.split(',').map(x=>x.trim()).filter(Boolean);
-    if(!newFields.length)return alert('Add at least one metadata field.');
+    if(!newFields.length)return notify('Add at least one metadata field.');
     const oldFields=[...t.fields];
     state.assets.filter(a=>a.typeId===t.id).forEach(a=>{
       const oldMeta=a.meta||{},next={};
@@ -550,14 +570,14 @@ document.addEventListener('click',async e=>{
 
   const itemBtn=e.target.closest('[data-edit-item]');
   if(itemBtn){const i=state.items[Number(itemBtn.dataset.editItem)];if(!i)return;
-    const name=prompt('Item name',itemName(i));if(name===null||!name.trim())return;
-    if(name.trim()!==itemName(i)&&state.items.some(j=>itemName(j).toLowerCase()===name.trim().toLowerCase()))return alert('Item already exists.');
+    const name=await uiPrompt('Item name',itemName(i));if(name===null||!name.trim())return;
+    if(name.trim()!==itemName(i)&&state.items.some(j=>itemName(j).toLowerCase()===name.trim().toLowerCase()))return notify('Item already exists.');
     const hasHistory=state.records.some(r=>r.item===itemName(i))||state.movements.some(m=>m.item===itemName(i));
-    if(hasHistory&&(name.trim()!==itemName(i)))return alert('Item name is locked once transactions exist.');
-    const unit=prompt('Unit (must already exist in Units settings)',i.unit||'');if(unit===null)return;
-    if(!state.units.includes(unit.trim()))return alert('Choose an existing unit.');
-    if(hasHistory&&unit.trim()!==i.unit)return alert('Unit is locked after transactions exist.');
-    const recoverable=confirm('Enable recovered-item tracking for '+name.trim()+'?\nOK = Yes, Cancel = No');
+    if(hasHistory&&(name.trim()!==itemName(i)))return notify('Item name is locked once transactions exist.');
+    const unit=await uiPrompt('Unit (must already exist in Units settings)',i.unit||'');if(unit===null)return;
+    if(!state.units.includes(unit.trim()))return notify('Choose an existing unit.');
+    if(hasHistory&&unit.trim()!==i.unit)return notify('Unit is locked after transactions exist.');
+    const recoverable=await uiConfirm('Enable recovered-item tracking for '+name.trim()+'?\nOK = Yes, Cancel = No');
     i.name=name.trim();i.unit=unit.trim();i.recoverable=recoverable;await persistSettings();save();return;
   }
   const simpleBtn=e.target.closest('[data-edit-simple]');
@@ -565,12 +585,12 @@ document.addEventListener('click',async e=>{
     const key=simpleBtn.dataset.editSimple,index=Number(simpleBtn.dataset.index);
     const current=state[key]?.[index];
     if(current===undefined)return;
-    const value=prompt('Edit '+(key==='items'?'Usage Item':key==='units'?'Unit':'Work Measure'),current);
+    const value=await uiPrompt('Edit '+(key==='items'?'Usage Item':key==='units'?'Unit':'Work Measure'),current);
     if(value===null)return;
     const clean=value.trim();
-    if(!clean)return alert('Value cannot be empty.');
-    if(state[key].some((v,i)=>i!==index&&v.toLowerCase()===clean.toLowerCase()))return alert('That value already exists.');
-    if(key==='units'&&state.items.some(i=>i.unit===current))return alert('Unit is assigned to an item. Edit items first.');
+    if(!clean)return notify('Value cannot be empty.');
+    if(state[key].some((v,i)=>i!==index&&v.toLowerCase()===clean.toLowerCase()))return notify('That value already exists.');
+    if(key==='units'&&state.items.some(i=>i.unit===current))return notify('Unit is assigned to an item. Edit items first.');
     state[key][index]=clean;
     await persistSettings();
     save();
@@ -580,7 +600,7 @@ document.addEventListener('click',async e=>{
   const a=e.target.closest('[data-delete-asset]');
   if(a){
     const id=a.dataset.deleteAsset;
-    if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}
+    if(state.records.some(r=>r.assetId===id)){notify('This asset already has records and cannot be removed.');return}
     await fb.deleteDoc(fb.doc(fb.db,'assets',id));
     state.assets=state.assets.filter(x=>x.id!==id);
     save();
@@ -600,23 +620,23 @@ $('assetForm').addEventListener('submit',async e=>{
 $('usageForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const item=$('usageItem').value,qty=Number($('usageQty').value),unit=itemUnit(item);
-  if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Select a configured item and positive quantity.');
+  if(!unit||!Number.isFinite(qty)||qty<=0)return notify('Select a configured item and positive quantity.');
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
-  if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
+  if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
   const available=stockSummaryData().find(x=>x.item===item)?.balance||0;
-  if(qty>available&&!confirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
+  if(qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
   const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
-  e.target.reset(); $('usageDate').value=today(); syncUsageItem();save(); alert('Usage record saved.');
+  e.target.reset(); $('usageDate').value=today(); syncUsageItem();save(); notify('Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
-  e.target.reset(); $('workDate').value=today(); save(); alert('Work record saved.');
+  e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
 });
 
 renderAll();
