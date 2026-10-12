@@ -37,11 +37,10 @@ exports.ausWrite=onCall({region:"asia-southeast1",maxInstances:10},async request
  if(action==="seed"){
   const settings=db.doc("settings/global"),types=db.collection("assetTypes");
   await db.runTransaction(async t=>{
-   const snap=await t.get(settings);
-   if(!snap.exists)t.set(settings,{units:["drum","litre","pc"],measures:["hour","trip","km","load","tonne"],items:[{name:"Diesel",unit:"litre",recoverable:false},{name:"Battery",unit:"pc",recoverable:true},{name:"Battery Liquid",unit:"litre",recoverable:false},{name:"Rimula",unit:"litre",recoverable:false},{name:"Hydraulic Oil",unit:"litre",recoverable:false}]});
-   for(const [id,name,fields] of [["type-lorry","Lorry",["Plate Number","Make / Model"]],["type-machine","Machine",["Machine ID","Make / Model"]]]){
-    const ref=types.doc(id),old=await t.get(ref);if(!old.exists)t.set(ref,{name,fields});
-   }
+   const definitions=[["type-lorry","Lorry",["Plate Number","Make / Model"]],["type-machine","Machine",["Machine ID","Make / Model"]]];
+   const snapshots=await Promise.all([t.get(settings),...definitions.map(([id])=>t.get(types.doc(id)))]);
+   if(!snapshots[0].exists)t.set(settings,{units:["drum","litre","pc"],measures:["hour","trip","km","load","tonne"],items:[{name:"Diesel",unit:"litre",recoverable:false},{name:"Battery",unit:"pc",recoverable:true},{name:"Battery Liquid",unit:"litre",recoverable:false},{name:"Rimula",unit:"litre",recoverable:false},{name:"Hydraulic Oil",unit:"litre",recoverable:false}]});
+   definitions.forEach(([id,name,fields],i)=>{if(!snapshots[i+1].exists)t.set(types.doc(id),{name,fields})});
   });return {ok:true};
  }
  if(action==="settings"){
@@ -138,8 +137,16 @@ exports.ausWrite=onCall({region:"asia-southeast1",maxInstances:10},async request
     if(!Number.isInteger(recoveredQty)||recoveredQty<0||recoveredQty>qty||(!config.recoverable&&recoveredQty))err("invalid-argument","Invalid recovery quantity");
     if(old.item===item){await updateBalance(t,item,Number(old.qty)-qty,recoveredQty-Number(old.recoveredQty||0));}
     else{
-     await updateBalance(t,old.item,Number(old.qty),-Number(old.recoveredQty||0));
-     await updateBalance(t,item,-qty,recoveredQty);
+     const oldRef=stockRef(old.item),newRef=stockRef(item);
+     const [oldSnap,newSnap]=await Promise.all([t.get(oldRef),t.get(newRef)]);
+     const oldAvail=Number(oldSnap.data()?.available||0)+Number(old.qty);
+     const oldRecovered=Number(oldSnap.data()?.recovered||0)-Number(old.recoveredQty||0);
+     const newAvail=Number(newSnap.data()?.available||0)-qty;
+     const newRecovered=Number(newSnap.data()?.recovered||0)+recoveredQty;
+     if(oldRecovered<0||newAvail<0||newRecovered<0)err("failed-precondition","Correction would create negative stock");
+     const stamp=admin.firestore.FieldValue.serverTimestamp();
+     t.set(oldRef,{item:old.item,available:oldAvail,recovered:oldRecovered,updatedAt:stamp});
+     t.set(newRef,{item,available:newAvail,recovered:newRecovered,updatedAt:stamp});
     }
     fields={...fields,item,unit:config.unit,recoveredQty};
    }else{
