@@ -90,12 +90,7 @@
                 <option value="immediate">Immediate Stock In &amp; Usage Out</option>
               </select>
             </label>
-            <div id="usageImmediateFields" class="hidden">
-              <label>Quantity received now
-                <input id="usageReceivedQty" type="number" min="0.01" step="0.01" placeholder="Received quantity">
-              </label>
-              <p class="muted">The received quantity and usage quantity are recorded together in one transaction. Any unused remainder adds to warehouse stock.</p>
-            </div>
+            <p id="usageImmediateFields" class="muted hidden">Stock In automatically equals Usage Out. No opening balance or separate stock receipt is required.</p>
           </div>
           <div class="grid two">
             <label>Mechanic<input id="usageMechanic" maxlength="80" placeholder="Mechanic name"></label>
@@ -273,6 +268,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-immediate-01"></script>
+  <script type="module" src="./app.js?v=20261012-immediate-02"></script>
 </body>
 </html>
