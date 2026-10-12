@@ -545,6 +545,8 @@ function openCompletion(id){
  completingId=id;
  $('completeDescription').textContent=(r.kind==='usage'?r.item:'Work')+' · '+r.date;
  $('completeUnitLabel').textContent=r.kind==='usage'?'Unit: '+r.unit:'Measure: '+r.measure;
+ $('completeRecoveredWrap').classList.toggle('hidden',r.kind!=='usage'||!itemRecoverable(r.item));
+ $('completeRecovered').value='0';
  $('completeQty').value='';
  $('completeDialog').showModal();
 }
@@ -557,7 +559,12 @@ $('completeForm').addEventListener('submit',async e=>{
  const next={...r,qty,status:'pending',completedBy:currentUser.uid,completedAt:new Date().toISOString()};
  if(r.kind==='usage'){
   next.receivedQty=r.stockSource==='immediate'?qty:0;
-  next.recoveredQty=itemRecoverable(r.item)?qty:0;
+  next.recoveredQty=itemRecoverable(r.item)?Number($('completeRecovered').value||0):0;
+  if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>qty)return notify('Recovered quantity must be a whole number from 0 to usage quantity.');
+  if(r.stockSource==='warehouse'){
+   const available=stockSummaryData().find(x=>x.item===r.item)?.balance||0;
+   if(qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+r.unit+'). Continue?'))return;
+  }
  }
  await persistRecord(next);
  $('completeDialog').close();await refreshServerState();notify('Entry completed and awaiting Manager review.');
