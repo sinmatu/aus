@@ -28,7 +28,7 @@ async function updateBalance(t,item,normalDelta,recoveredDelta){
 }
 function requireFields(obj,fields){if(!obj||typeof obj!=="object"||!fields.every(k=>Object.hasOwn(obj,k)))err("invalid-argument","Required fields missing")}
 function validRemarks(data){if(!str(data.remarks||"",400))err("invalid-argument","Remarks too long")}
-exports.ausWrite=onCall({region:"asia-southeast1",maxInstances:10},async request=>{
+exports.ausWrite=onCall({region:"asia-southeast1",maxInstances:10,cors:["https://sinmatu.github.io"]},async request=>{
  if(!request.auth)err("unauthenticated","Sign in required");
  const uid=request.auth.uid,role=await userRole(uid),manager=role==="manager";
  const {action,payload={}}=request.data||{};
