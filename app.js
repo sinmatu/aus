@@ -177,9 +177,13 @@ function renderSelectors(){
   const assetOpts=optionList(state.assets,'Select asset',a=>({value:a.id,label:assetLabel(a)}));
   $('usageAsset').innerHTML=assetOpts; $('workAsset').innerHTML=assetOpts;
   const allAssets='<option value="">All Assets</option>'+state.assets.map(a=>'<option value="'+esc(a.id)+'">'+esc(assetLabel(a))+'</option>').join('');
+  const oldRecordAsset=$('recordAsset').value,oldReportAsset=$('reportAsset').value;
   $('recordAsset').innerHTML=allAssets;
   $('reportAsset').innerHTML=allAssets;
+  $('recordAsset').value=oldRecordAsset; $('reportAsset').value=oldReportAsset;
+  const oldReportItem=$('reportItem').value;
   $('reportItem').innerHTML='<option value="">All Items</option>'+state.items.map(i=>'<option value="'+esc(itemName(i))+'">'+esc(itemName(i))+'</option>').join('');
+  $('reportItem').value=oldReportItem;
   $('usageItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
   syncUsageItem();
   $('stockItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
@@ -305,6 +309,7 @@ function openCorrection(id){
   $('correctionNote').value=r.correctionNote||'';
   if(r.kind==='usage'){
     $('correctionFields').innerHTML='<div class="grid three"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Unit<select id="correctUnit">'+state.units.map(u=>'<option '+(u===r.unit?'selected':'')+'>'+esc(u)+'</option>').join('')+'</select></label><label>Item<select id="correctItem">'+state.items.map(i=>'<option '+(itemName(i)===r.item?'selected':'')+'>'+esc(itemName(i))+'</option>').join('')+'</select></label></div>';
+    if(itemRecoverable(r.item))$('correctionFields').insertAdjacentHTML('beforeend','<label>Old items recovered<input id="correctRecovered" type="number" min="0" step="1" value="'+esc(r.recoveredQty||0)+'"></label>');
   }else{
     $('correctionFields').innerHTML='<div class="grid two"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label></div>';
   }
@@ -315,7 +320,7 @@ async function saveCorrection(e){
   const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
   r.original=r.original||structuredClone(r);
   r.qty=Number($('correctQty').value);
-  if(r.kind==='usage'){r.item=$('correctItem').value;r.unit=itemUnit(r.item)}else r.measure=$('correctMeasure').value;
+  if(r.kind==='usage'){r.item=$('correctItem').value;r.unit=itemUnit(r.item);r.recoveredQty=itemRecoverable(r.item)?Number($('correctRecovered')?.value||0):0;if(!Number.isInteger(r.recoveredQty)||r.recoveredQty<0||r.recoveredQty>r.qty)return alert('Recovered quantity must be a whole number no larger than used quantity.')}else r.measure=$('correctMeasure').value;
   r.correctionNote=$('correctionNote').value.trim();
   r.correctedBy=currentUser?.uid||'';
   r.correctedAt=new Date().toISOString();
@@ -383,6 +388,10 @@ function renderReports(){
 function reportMatrix(){
   const rows=reportRows();
   const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],['Asset',$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected'):'All Assets'],['Item',$('reportItem').value||'All Items'],[]];
+  aoa.push(['Stock / Usage Summary']);aoa.push(['Item','Unit','Stock In (all time)','Usage Out (all time)','Balance']);
+  stockSummaryData().filter(x=>!$('reportItem').value||x.item===$('reportItem').value).forEach(x=>aoa.push([x.item,x.unit,x.ins,x.outs,x.balance]));
+  aoa.push([],['Recovered Items'],['Item','Unit','Recovered In','Recovered Out','Balance']);
+  stockSummaryData().filter(x=>x.recoverable&&(!$('reportItem').value||x.item===$('reportItem').value)).forEach(x=>aoa.push([x.item,x.unit,x.recoveredIn,x.recoveredOut,x.recoveredBalance]));aoa.push([]);
   const groups=reportAssetGroups(rows);
   groups.forEach((g,gi)=>{
     aoa.push([g.name]);
@@ -619,7 +628,9 @@ $('usageForm').addEventListener('submit',async e=>{
   const item=$('usageItem').value,qty=Number($('usageQty').value),unit=itemUnit(item);
   if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Select a configured item and positive quantity.');
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
-  if(returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
+  if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
+  const available=stockSummaryData().find(x=>x.item===item)?.balance||0;
+  if(qty>available&&!confirm('Usage exceeds recorded stock balance ('+available+' '+unit+'). Continue anyway?'))return;
   const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   state.records.push(r);
