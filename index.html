@@ -48,6 +48,7 @@
     <nav class="tabs" aria-label="System sections">
       <button class="active" data-view="assets">Assets</button>
       <button data-view="usage">Usage Entry</button>
+      <button data-view="stock">Stock / Recovery</button>
       <button data-view="work">Work Entry</button>
       <button data-view="records">Records</button>
       <button data-view="reports">Reports</button>
@@ -76,8 +77,9 @@
           <div class="grid three">
             <label>Item<select id="usageItem" required></select></label>
             <label>Quantity<input id="usageQty" type="number" min="0" step="0.01" required></label>
-            <label>Unit<select id="usageUnit" required></select></label>
+            <label>Unit<input id="usageUnit" readonly placeholder="Auto assigned by item"></label>
           </div>
+          <div id="usageRecovery" class="recovery-inline hidden"><label>Old items returned to warehouse<input id="usageRecoveredQty" type="number" min="0" step="1" value="0"></label><small>Prefilled to match quantity on replacement. Change to 0 if none returned.</small></div>
           <div class="grid two">
             <label>Mechanic<input id="usageMechanic" maxlength="80" placeholder="Mechanic name"></label>
             <label>Supervisor<input id="usageSupervisor" maxlength="80" placeholder="Supervisor name"></label>
@@ -87,6 +89,8 @@
         </form>
       </div>
     </section>
+
+    <section id="view-stock" class="view hidden"><div class="page-head"><div><div class="eyebrow">Warehouse</div><h2>Stock In & Recovered Items</h2></div><p class="muted">Record incoming supplies or issue recovered items when sold or disposed.</p></div><div class="panel"><h3>New Stock In</h3><form id="stockForm"><div class="grid three"><label>Date<input type="date" id="stockDate" required></label><label>Item<select id="stockItem" required></select></label><label>Quantity<input type="number" id="stockQty" min="0.01" step="0.01" required></label></div><label>Unit<input id="stockUnit" readonly placeholder="Auto assigned"></label><label>Reference / Remarks<textarea id="stockRemarks" maxlength="400" placeholder="Supplier, delivery reference, purpose"></textarea></label><button class="primary" type="submit">Save Stock In</button></form></div><div class="panel"><h3>Recovered Stock Out</h3><form id="recoveryForm"><div class="grid three"><label>Date<input id="recoveryDate" type="date" required></label><label>Recovered Item<select id="recoveryItem" required></select></label><label>Quantity<input id="recoveryQty" type="number" step="1" min="1" required></label></div><label>Reason<select id="recoveryReason"><option value="sold">Sold</option><option value="disposed">Disposed</option><option value="other">Other</option></select></label><label>Reference / Remarks<textarea id="recoveryRemarks" maxlength="400"></textarea></label><button class="primary" type="submit">Save Recovered Stock Out</button></form></div><div class="panel"><h3>Stock Movement History</h3><div class="table-wrap" id="movementTable"></div></div></section>
 
     <section id="view-work" class="view hidden">
       <div class="page-head">
@@ -158,6 +162,8 @@
           <select id="reportItem" aria-label="Report item"></select>
         </div>
       </div>
+      <h3>Stock & Usage Summary</h3><div id="stockSummary" class="table-wrap"></div>
+      <h3>Recovered Items</h3><div id="recoverySummary" class="table-wrap"></div>
       <div id="reportSummary"></div>
       <div id="reportTable" class="table-wrap report-table-wrap"></div>
       <div class="actions report-actions">
@@ -188,12 +194,9 @@
             </div>
 
             <div>
-              <h3>Usage Items</h3>
+              <h3>Usage Items · Unit assigned</h3>
               <p class="muted">Items available to the universal Usage Entry form.</p>
-              <form id="itemForm" class="inline-form">
-                <input id="itemName" placeholder="e.g. Fuel" maxlength="60" required>
-                <button class="secondary" type="submit">Add</button>
-              </form>
+              <form id="itemForm"><input id="itemName" placeholder="e.g. Diesel" maxlength="60" required><label>Assigned Unit<select id="itemUnit" required></select></label><label class="inline-check"><input id="itemRecoverable" type="checkbox"> Track recovered old items</label><button class="secondary" type="submit">Add Usage Item</button></form>
               <div id="itemList" class="chips"></div>
 
               <h3 class="subsection">Units</h3>
@@ -253,6 +256,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-01"></script>
+  <script type="module" src="./app.js?v=20261012-02"></script>
 </body>
 </html>
