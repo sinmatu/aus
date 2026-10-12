@@ -14,7 +14,8 @@ const defaults={
   measures:['hour','trip','km','load','tonne'],
   assets:[],
   records:[],
-  movements:[]
+  movements:[],
+  balances:[]
 };
 let state=structuredClone(defaults);
 function save(){
@@ -33,13 +34,14 @@ async function persistRecord(r){return serverWrite('record',r)}
 async function persistMovement(m){return serverWrite('movement',m)}
 async function refreshServerState(){await loadFirebaseState();save()}
 async function loadFirebaseState(){
-  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
+  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap,balanceSnap]=await Promise.all([
     fb.getDocsFromServer(fb.collection(fb.db,'assetTypes')),
     fb.getDocsFromServer(fb.collection(fb.db,'assets')),
     fb.getDocsFromServer(fb.collection(fb.db,'usageRecords')),
     fb.getDocsFromServer(fb.collection(fb.db,'workRecords')),
     fb.getDocFromServer(fb.doc(fb.db,'settings','global')),
-    fb.getDocsFromServer(fb.collection(fb.db,'stockMovements'))
+    fb.getDocsFromServer(fb.collection(fb.db,'stockMovements')),
+    fb.getDocsFromServer(fb.collection(fb.db,'stockBalances'))
   ]);
   state={
     assetTypes:typeSnap.docs.map(d=>({id:d.id,...d.data()})),
@@ -48,6 +50,7 @@ async function loadFirebaseState(){
     measures:settingsSnap.exists()&&Array.isArray(settingsSnap.data().measures)?settingsSnap.data().measures:[],
     assets:assetSnap.docs.map(d=>({id:d.id,...d.data()})),
     movements:movementSnap.docs.map(d=>({id:d.id,...d.data()})),
+    balances:balanceSnap.docs.map(d=>d.data()),
     records:[
       ...usageSnap.docs.map(d=>({id:d.id,kind:'usage',...d.data()})),
       ...workSnap.docs.map(d=>({id:d.id,kind:'work',...d.data()}))
@@ -404,7 +407,8 @@ function stockSummaryData(){
   const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.qty||0),0);
   const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
   const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
-  return {item,unit,ins,outs,balance:ins-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
+  const confirmed=state.balances?.find(b=>b.item===item);
+  return {item,unit,ins,outs,balance:confirmed?Number(confirmed.available):ins-outs,recoveredIn,recoveredOut,recoveredBalance:confirmed?Number(confirmed.recovered):recoveredIn-recoveredOut,recoverable:!!i.recoverable};
  });
 }
 function renderStockReports(){
