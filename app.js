@@ -96,6 +96,7 @@ async function initFirebase(){
   ]);
   const app=A.initializeApp(firebaseConfig);
   fb.auth=U.getAuth(app); fb.db=F.getFirestore(app);
+  await U.setPersistence(fb.auth,U.inMemoryPersistence);
   fb.callable=Fn.httpsCallable(Fn.getFunctions(app,'asia-southeast1'),'ausWrite');
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
