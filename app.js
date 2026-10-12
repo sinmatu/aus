@@ -263,10 +263,10 @@ function renderAssetProfiles(){
   }).join('');
 }
 function recordDetail(r){
-  return r.kind==='usage'?(r.trackQuantity===false?r.item+' · Description only':r.item+' · '+r.qty+' '+r.unit):r.measure+' · '+r.qty;
+  return r.kind==='usage'?(r.trackQuantity===false?r.item:r.item+' · '+r.qty+' '+r.unit):r.qty+' '+r.measure;
 }
 function recordReference(r){
-  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):(r.job||'');
+  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):[r.performedBy&&'Performed by: '+r.performedBy,r.job&&'Job / Ref: '+r.job].filter(Boolean).join(' · ');
 }
 function recordRemarks(r){return r.remarks||'';}
 function recordsTable(records){
@@ -673,7 +673,7 @@ $('usageForm').addEventListener('submit',async e=>{
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),performedBy:$('workPerformedBy').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
