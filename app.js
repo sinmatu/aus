@@ -220,14 +220,15 @@ function recordDetail(r){
   return r.kind==='usage'?r.item+' · '+r.qty+' '+r.unit:r.measure+' · '+r.qty;
 }
 function recordReference(r){
-  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):(r.job||r.remarks||'');
+  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):(r.job||'');
 }
+function recordRemarks(r){return r.remarks||'';}
 function recordsTable(records){
   if(!records.length)return '<div class="empty">No matching records.</div>';
   const manager=currentRole==='manager';
   const selectHead=manager?'<th class="select-col"><input id="selectVisibleRecords" type="checkbox" aria-label="Select reviewable records"></th>':'';
   const reviewHead=manager?'<th>Review</th>':'';
-  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Status</th><th>Reference / Sign</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
+  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Status</th><th>Purpose / Remarks</th><th>Sign / Reference</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
     const status=r.status||'pending';
     const reviewable=status!=='checked'&&status!=='void';
@@ -240,7 +241,7 @@ function recordsTable(records){
       const voidBtn='<button class="record-action danger-link" data-status="void">Void Entry</button>';
       reviewCell='<td><div class="record-actions">'+checked+correct+correction+voidBtn+'</div></td>';
     }
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status)+'</td><td>'+esc(recordReference(r)||'—')+'</td>'+reviewCell+'</tr>';
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+reviewCell+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
@@ -344,8 +345,8 @@ function reportAssetGroups(records){
 function reportRowsTable(records,kind){
   if(!records.length)return '';
   const label=kind==='usage'?'Usage':'Work';
-  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th>Reference / Sign</th></tr></thead><tbody>'+records.map(r=>
-    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(recordReference(r)||'—')+'</td></tr>'
+  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th>Purpose / Remarks</th><th>Sign / Reference</th></tr></thead><tbody>'+records.map(r=>
+    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
   ).join('')+'</tbody></table></div>';
 }
 function reportTable(records){
@@ -375,13 +376,13 @@ function reportMatrix(){
     aoa.push([g.name]);
     if(g.usage.length){
       aoa.push(['Usage']);
-      aoa.push(['Date','Type','Detail','Reference / Sign']);
-      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),recordReference(r)||'']));
+      aoa.push(['Date','Type','Detail','Purpose / Remarks','Sign / Reference']);
+      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(g.work.length){
       aoa.push(['Work']);
-      aoa.push(['Date','Type','Detail','Reference / Sign']);
-      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordReference(r)||'']));
+      aoa.push(['Date','Type','Detail','Purpose / Remarks','Sign / Reference']);
+      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(gi<groups.length-1)aoa.push([]);
   });
@@ -390,7 +391,7 @@ function reportMatrix(){
 async function exportExcel(){
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const ws=XLSX.utils.aoa_to_sheet(reportMatrix());
-  ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:42}];
+  ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:65},{wch:30}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
   XLSX.writeFile(wb,'aus-report-'+($('reportMonth').value||'all')+'.xlsx');
 }
@@ -399,8 +400,8 @@ async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
-  const xs=[14,52,90,155];
-  rows.slice(1).forEach(row=>{if(y>190){doc.addPage();y=14}row.forEach((v,i)=>{if(v!==undefined&&v!==null&&v!=='')doc.text(String(v).slice(0,42),xs[i]||14,y)});y+=6});
+  const xs=[14,52,86,132,233];
+  rows.slice(1).forEach(row=>{if(y>190){doc.addPage();y=14}row.forEach((v,i)=>{if(v!==undefined&&v!==null&&v!=='')doc.text(String(v).slice(0,i===3?65:25),xs[i]||14,y)});y+=6});
   doc.save('aus-report-'+($('reportMonth').value||'all')+'.pdf');
 }
 $('exportExcel').addEventListener('click',exportExcel);
