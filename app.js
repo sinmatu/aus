@@ -459,17 +459,9 @@ function syncUsageItem(){
 $('usageItem').addEventListener('change',syncUsageItem);
 $('usageQty').addEventListener('input',()=>{if(itemRecoverable($('usageItem').value))$('usageRecoveredQty').value=String(Number($('usageQty').value)||0)});
 function syncUsageSource(){
- const immediate=$('usageSource').value==='immediate';
- $('usageImmediateFields').classList.toggle('hidden',!immediate);
- $('usageReceivedQty').required=immediate;
- if(immediate&&!$('usageReceivedQty').value)$('usageReceivedQty').value=$('usageQty').value||'';
+ $('usageImmediateFields').classList.toggle('hidden',$('usageSource').value!=='immediate');
 }
 $('usageSource').addEventListener('change',syncUsageSource);
-$('usageQty').addEventListener('input',()=>{
- if($('usageSource').value==='immediate'&&!$('usageReceivedQty').dataset.edited)$('usageReceivedQty').value=$('usageQty').value;
-});
-$('usageReceivedQty').addEventListener('input',()=>{$('usageReceivedQty').dataset.edited='yes'});
-
 $('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('stockItem').value)});
 async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);await refreshServerState()}
 $('stockForm').addEventListener('submit',async e=>{
@@ -660,14 +652,13 @@ $('usageForm').addEventListener('submit',async e=>{
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
   const immediate=$('usageSource').value==='immediate';
-  const receivedQty=immediate?Number($('usageReceivedQty').value):0;
-  if(immediate&&(!Number.isFinite(receivedQty)||receivedQty<=0))return notify('Enter a positive quantity received.');
+  const receivedQty=immediate?qty:0;
   const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
   if(qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
   const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,receivedQty,stockSource:immediate?'immediate':'warehouse',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
-  e.target.reset(); $('usageDate').value=today();delete $('usageReceivedQty').dataset.edited;syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
+  e.target.reset(); $('usageDate').value=today();syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
