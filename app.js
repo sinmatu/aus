@@ -116,14 +116,13 @@ async function initFirebase(){
       currentUser=user; currentRole=role;
       showShell();
       try {
-        await seedFirebaseDefaults();
         await loadFirebaseState();
         save();
         $('setupBanner').classList.add('hidden');
       } catch (loadErr) {
-        $('setupBanner').textContent='Signed in, but server data could not load: '+(loadErr.message||loadErr)+'. Check Firebase rules and connection.';
+        $('setupBanner').textContent='Signed in, but Firestore could not load: '+(loadErr.message||loadErr)+'. Check Firestore Rules and connection.';
         $('setupBanner').classList.remove('hidden');
-        document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=true);
+        console.error('AUS data loading failed',loadErr);
       }
     }catch(err){
       $('loginError').textContent=err.message||'Account is not authorised.';
@@ -628,5 +627,5 @@ initFirebase().catch(err=>{
   showLogin();
 });
 window.addEventListener('offline',()=>{$('setupBanner').textContent='AUS requires an internet connection. Entries are disabled offline.';$('setupBanner').classList.remove('hidden');document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=true)});
-window.addEventListener('online',()=>{document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=false);$('setupBanner').classList.add('hidden');if(currentUser)refreshServerState().catch(console.error)});
+window.addEventListener('online',()=>{document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=false);$('setupBanner').classList.add('hidden');if(currentUser)refreshServerState().catch(err=>{$('setupBanner').textContent='Firestore refresh failed: '+(err.message||err);$('setupBanner').classList.remove('hidden');console.error(err)})});
 window.addEventListener('unhandledrejection',e=>{if(e.reason?.message){$('setupBanner').textContent='Server operation failed: '+e.reason.message;$('setupBanner').classList.remove('hidden')}});
