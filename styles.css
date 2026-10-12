@@ -89,3 +89,5 @@
 #recordsTable .remarks-cell,#reportTable .remarks-cell{min-width:230px;max-width:420px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
 #recordsTable .sign-cell,#reportTable .sign-cell{max-width:170px;font-size:.76rem;color:#6b7280;white-space:normal;overflow-wrap:anywhere}
 #reportTable table{min-width:850px}
+
+.inline-check{display:flex;flex-direction:row;align-items:center;gap:8px}.inline-check input{width:auto}.recovery-inline{padding:14px;border:1px solid #d1d5db;border-radius:12px;background:#f9fafb}.recovery-inline small{color:#6b7280}#stockSummary,#recoverySummary{margin:12px 0 20px}#stockSummary table,#recoverySummary table{min-width:650px}#movementTable .remarks-cell{white-space:pre-wrap;max-width:360px}
