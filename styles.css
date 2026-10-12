@@ -83,3 +83,9 @@
 .report-kind-section{margin-top:12px}
 .report-kind-section h4{margin:0 0 8px;font-size:.9rem}
 .report-kind-section table{min-width:760px}
+
+/* Readable purpose with compact sign/reference in Records and Reports */
+#recordsTable table{min-width:1200px}
+#recordsTable .remarks-cell,#reportTable .remarks-cell{min-width:230px;max-width:420px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+#recordsTable .sign-cell,#reportTable .sign-cell{max-width:170px;font-size:.76rem;color:#6b7280;white-space:normal;overflow-wrap:anywhere}
+#reportTable table{min-width:850px}
