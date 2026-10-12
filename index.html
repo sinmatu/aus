@@ -96,7 +96,7 @@
             <label>Mechanic<input id="usageMechanic" maxlength="80" placeholder="Mechanic name"></label>
             <label>Supervisor<input id="usageSupervisor" maxlength="80" placeholder="Supervisor name"></label>
           </div>
-          <label>Purpose / remarks<textarea id="usageRemarks" rows="3" maxlength="400" placeholder="Why was this item used or replaced?"></textarea></label>
+          <label>Description<textarea id="usageRemarks" rows="3" maxlength="400" placeholder="Why was this item used or replaced?"></textarea></label>
           <button class="primary" type="submit">Save Usage Record</button>
         </form>
       </div>
@@ -120,8 +120,8 @@
             <label>Quantity<input id="workQty" type="number" min="0" step="0.01" required></label>
             <label>Job / reference<input id="workJob" maxlength="100" placeholder="Optional job or site"></label>
           </div>
-          <label>Performed by / Operator<input id="workPerformedBy" maxlength="100" placeholder="Name of person or team who performed the work"></label>
-          <label>Remarks<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
+          <div class="grid two"><label>Operator<input id="workPerformedBy" maxlength="100" placeholder="Person or team who performed the work"></label><label>Supervisor<input id="workSupervisor" maxlength="100" placeholder="Supervising person"></label></div>
+          <label>Description<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
           <button class="primary" type="submit">Save Work Entry</button>
         </form>
       </div>
@@ -269,6 +269,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-workdetail-01"></script>
+  <script type="module" src="./app.js?v=20261012-normalized-01"></script>
 </body>
 </html>
