@@ -20,6 +20,7 @@
 
   <div id="ausNotice" class="aus-notice hidden" role="status"></div>
   <div id="ausModal" class="aus-modal hidden"><form id="ausModalForm" class="aus-modal-card"><h3 id="ausModalTitle"></h3><input id="ausModalInput" type="text" maxlength="300"><div class="aus-modal-actions"><button id="ausModalCancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Confirm</button></div></form></div>
+  <div id="usageItemModal" class="aus-modal hidden"><form id="usageItemEditForm" class="aus-modal-card"><h3>Edit Usage Item</h3><label>Item name<input id="usageItemEditName" type="text" maxlength="60" required></label><label>Assigned unit<select id="usageItemEditUnit" required></select></label><label class="aus-recovery-toggle"><input id="usageItemEditRecoverable" type="checkbox"> Enable recovered-item tracking</label><p id="usageItemHistoryNote" class="muted hidden">Name and unit are locked because transactions already exist.</p><div class="aus-modal-actions"><button id="usageItemEditCancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Save changes</button></div></form></div>
   <main>
     <section id="loginView" class="panel login-panel">
       <h2>Sign in</h2>
@@ -258,6 +259,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-modal-01"></script>
+  <script type="module" src="./app.js?v=20261012-itemeditor-01"></script>
 </body>
 </html>
