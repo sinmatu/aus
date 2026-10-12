@@ -25,38 +25,21 @@ const itemConfig=name=>state.items.find(i=>itemName(i)===name);
 const itemUnit=name=>itemConfig(name)?.unit||'';
 const itemRecoverable=name=>!!itemConfig(name)?.recoverable;
 function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
-async function persistSettings(){
-  await fb.setDoc(fb.doc(fb.db,'settings','global'),{
-    items:state.items,
-    units:state.units,
-    measures:state.measures,
-    updatedAt:new Date().toISOString(),
-    updatedBy:currentUser?.uid||''
-  },{merge:true});
-}
-async function persistAssetType(t){
-  await fb.setDoc(fb.doc(fb.db,'assetTypes',t.id),{name:t.name,fields:t.fields},{merge:true});
-}
-async function persistAsset(a){
-  await fb.setDoc(fb.doc(fb.db,'assets',a.id),{
-    typeId:a.typeId,
-    name:a.name,
-    meta:a.meta||{}
-  },{merge:true});
-}
-async function persistRecord(r){
-  const data={...r};delete data.id;delete data.kind;
-  await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data,{merge:true});
-}
-async function persistMovement(m){const data={...m};delete data.id;await fb.setDoc(fb.doc(fb.db,'stockMovements',m.id),data)}
+async function serverWrite(action,payload){if(!navigator.onLine)throw Error('AUS requires internet');if(!fb.callable)throw Error('Backend unavailable');const result=await fb.callable({action,payload});return result.data}
+async function persistSettings(){return serverWrite('settings',{items:state.items,units:state.units,measures:state.measures})}
+async function persistAssetType(t){return serverWrite('assetType',t)}
+async function persistAsset(a){return serverWrite('asset',a)}
+async function persistRecord(r){return serverWrite('record',r)}
+async function persistMovement(m){return serverWrite('movement',m)}
+async function refreshServerState(){await loadFirebaseState();save()}
 async function loadFirebaseState(){
   const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
-    fb.getDocs(fb.collection(fb.db,'assetTypes')),
-    fb.getDocs(fb.collection(fb.db,'assets')),
-    fb.getDocs(fb.collection(fb.db,'usageRecords')),
-    fb.getDocs(fb.collection(fb.db,'workRecords')),
-    fb.getDoc(fb.doc(fb.db,'settings','global')),
-    fb.getDocs(fb.collection(fb.db,'stockMovements'))
+    fb.getDocsFromServer(fb.collection(fb.db,'assetTypes')),
+    fb.getDocsFromServer(fb.collection(fb.db,'assets')),
+    fb.getDocsFromServer(fb.collection(fb.db,'usageRecords')),
+    fb.getDocsFromServer(fb.collection(fb.db,'workRecords')),
+    fb.getDocFromServer(fb.doc(fb.db,'settings','global')),
+    fb.getDocsFromServer(fb.collection(fb.db,'stockMovements'))
   ]);
   state={
     assetTypes:typeSnap.docs.map(d=>({id:d.id,...d.data()})),
@@ -71,19 +54,7 @@ async function loadFirebaseState(){
     ]
   };
 }
-async function seedFirebaseDefaults(){
-  if(currentRole!=='manager')return;
-  const typeSnap=await fb.getDocs(fb.collection(fb.db,'assetTypes'));
-  if(typeSnap.empty){
-    for(const t of defaults.assetTypes)await persistAssetType(t);
-  }
-  const settingsRef=fb.doc(fb.db,'settings','global');
-  const settingsSnap=await fb.getDoc(settingsRef);
-  if(!settingsSnap.exists()){
-    state.items=structuredClone(defaults.items);state.units=[...defaults.units];state.measures=[...defaults.measures];
-    await persistSettings();
-  }
-}
+async function seedFirebaseDefaults(){if(currentRole==='manager')await serverWrite('seed',{})}
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -114,18 +85,20 @@ function showShell(){
   applyRoleUI();
 }
 async function initFirebase(){
-  const [A,U,F]=await Promise.all([
+  const [A,U,F,Fn]=await Promise.all([
     import('https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js'),
     import('https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js'),
-    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js')
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js'),
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-functions.js')
   ]);
   const app=A.initializeApp(firebaseConfig);
   fb.auth=U.getAuth(app); fb.db=F.getFirestore(app);
+  fb.callable=Fn.httpsCallable(Fn.getFunctions(app,'asia-southeast1'),'ausWrite');
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
     if(!user){currentUser=null;currentRole='';showLogin();return}
     try{
-      const snap=await F.getDoc(F.doc(fb.db,'users',user.uid));
+      const snap=await F.getDocFromServer(F.doc(fb.db,'users',user.uid));
       if(!snap.exists())throw Error('Account is not authorised for this system.');
       const profile=snap.data();
       const role=profile.role||'';
@@ -281,27 +254,8 @@ function updateBulkReview(){
     master.indeterminate=checked.length>0&&checked.length<boxes.length;
   }
 }
-async function setRecordStatus(id,status){
-  const r=state.records.find(x=>x.id===id); if(!r)return;
-  r.status=status;
-  r.reviewedBy=currentUser?.uid||'';
-  r.reviewedAt=new Date().toISOString();
-  await persistRecord(r);
-  save();
-}
-async function markSelectedChecked(){
-  const selected=[...document.querySelectorAll('#recordsTable .record-select:checked')];
-  for(const x of selected){
-    const r=state.records.find(v=>v.id===x.value);
-    if(r){
-      r.status='checked';
-      r.reviewedBy=currentUser?.uid||'';
-      r.reviewedAt=new Date().toISOString();
-      await persistRecord(r);
-    }
-  }
-  save();
-}
+async function setRecordStatus(id,status){const r=state.records.find(x=>x.id===id);if(!r)return;await serverWrite('review',{id:r.id,kind:r.kind,status});await refreshServerState()}
+async function markSelectedChecked(){const selected=[...document.querySelectorAll('#recordsTable .record-select:checked')];for(const x of selected){const r=state.records.find(v=>v.id===x.value);if(r)await serverWrite('review',{id:r.id,kind:r.kind,status:'checked'})}await refreshServerState()}
 function openCorrection(id){
   const r=state.records.find(x=>x.id===id);if(!r)return;
   $('correctionRecordId').value=id;
@@ -315,20 +269,7 @@ function openCorrection(id){
   }
   $('correctionDialog').showModal();
 }
-async function saveCorrection(e){
-  e.preventDefault();
-  const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
-  r.original=r.original||structuredClone(r);
-  r.qty=Number($('correctQty').value);
-  if(r.kind==='usage'){r.item=$('correctItem').value;r.unit=itemUnit(r.item);r.recoveredQty=itemRecoverable(r.item)?Number($('correctRecovered')?.value||0):0;if(!Number.isInteger(r.recoveredQty)||r.recoveredQty<0||r.recoveredQty>r.qty)return alert('Recovered quantity must be a whole number no larger than used quantity.')}else r.measure=$('correctMeasure').value;
-  r.correctionNote=$('correctionNote').value.trim();
-  r.correctedBy=currentUser?.uid||'';
-  r.correctedAt=new Date().toISOString();
-  r.status='checked';
-  await persistRecord(r);
-  $('correctionDialog').close();
-  save();
-}
+async function saveCorrection(e){e.preventDefault();const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;const payload={id:r.id,kind:r.kind,qty:Number($('correctQty').value),note:$('correctionNote').value.trim()};if(r.kind==='usage'){payload.item=$('correctItem').value;payload.recoveredQty=itemRecoverable(payload.item)?Number($('correctRecovered')?.value||0):0}else payload.measure=$('correctMeasure').value;await serverWrite('correct',payload);$('correctionDialog').close();await refreshServerState()}
 function reportRows(){
   const item=$('reportItem').value;
   return state.records
@@ -443,7 +384,7 @@ function syncUsageItem(){
 $('usageItem').addEventListener('change',syncUsageItem);
 $('usageQty').addEventListener('input',()=>{if(itemRecoverable($('usageItem').value))$('usageRecoveredQty').value=String(Number($('usageQty').value)||0)});
 $('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('stockItem').value)});
-async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);state.movements.push(m);save()}
+async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);await refreshServerState()}
 $('stockForm').addEventListener('submit',async e=>{
  e.preventDefault();const item=$('stockItem').value,qty=Number($('stockQty').value),unit=itemUnit(item);
  if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Item and positive quantity required.');
@@ -607,7 +548,7 @@ document.addEventListener('click',async e=>{
   if(a){
     const id=a.dataset.deleteAsset;
     if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}
-    await fb.deleteDoc(fb.doc(fb.db,'assets',id));
+    await serverWrite('removeAsset',{id});
     state.assets=state.assets.filter(x=>x.id!==id);
     save();
   }
@@ -629,18 +570,17 @@ $('usageForm').addEventListener('submit',async e=>{
   if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Select a configured item and positive quantity.');
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
-  const available=stockSummaryData().find(x=>x.item===item)?.balance||0;
-  if(qty>available&&!confirm('Usage exceeds recorded stock balance ('+available+' '+unit+'). Continue anyway?'))return;
+  // Server enforces stock balance atomically.
   const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
-  state.records.push(r);
+  await refreshServerState();
   e.target.reset(); $('usageDate').value=today(); syncUsageItem();save(); alert('Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
-  state.records.push(r);
+  await refreshServerState();
   e.target.reset(); $('workDate').value=today(); save(); alert('Work record saved.');
 });
 
@@ -651,3 +591,6 @@ initFirebase().catch(err=>{
   $('setupBanner').textContent='Firebase startup error: '+(err.message||err);
   showLogin();
 });
+window.addEventListener('offline',()=>{$('setupBanner').textContent='AUS requires an internet connection. Entries are disabled offline.';$('setupBanner').classList.remove('hidden');document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=true)});
+window.addEventListener('online',()=>{document.querySelectorAll('#shell form button[type="submit"]').forEach(b=>b.disabled=false);$('setupBanner').classList.add('hidden');if(currentUser)refreshServerState().catch(console.error)});
+window.addEventListener('unhandledrejection',e=>{if(e.reason?.message){$('setupBanner').textContent='Server operation failed: '+e.reason.message;$('setupBanner').classList.remove('hidden')}});
