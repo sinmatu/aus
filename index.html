@@ -79,7 +79,7 @@
           </div>
           <div class="grid three">
             <label>Item<select id="usageItem" required></select></label>
-            <label>Quantity<input id="usageQty" type="number" min="0" step="0.01" required></label>
+            <label>Quantity<input id="usageQty" type="number" min="0.01" step="0.01"></label>
             <label>Unit<input id="usageUnit" readonly placeholder="Auto assigned by item"></label>
           </div>
           <div id="usageRecovery" class="recovery-inline hidden"><label>Old items returned to warehouse<input id="usageRecoveredQty" type="number" min="0" step="1" value="0"></label><small>Prefilled to match quantity on replacement. Change to 0 if none returned.</small></div>
@@ -97,7 +97,7 @@
             <label>Supervisor<input id="usageSupervisor" maxlength="80" placeholder="Supervisor name"></label>
           </div>
           <label>Description<textarea id="usageRemarks" rows="3" maxlength="400" placeholder="Why was this item used or replaced?"></textarea></label>
-          <button class="primary" type="submit">Save Usage Record</button>
+          <p class="muted">Leave quantity blank to save Pending Details. Complete it later before Manager review.</p><button class="primary" type="submit">Save Usage Record</button>
         </form>
       </div>
     </section>
@@ -117,12 +117,12 @@
           </div>
           <div class="grid three">
             <label>Work measure<select id="workMeasure" required></select></label>
-            <label>Quantity<input id="workQty" type="number" min="0" step="0.01" required></label>
+            <label>Quantity<input id="workQty" type="number" min="0.01" step="0.01"></label>
             <label>Job / reference<input id="workJob" maxlength="100" placeholder="Optional job or site"></label>
           </div>
           <div class="grid two"><label>Operator<input id="workPerformedBy" maxlength="100" placeholder="Person or team who performed the work"></label><label>Supervisor<input id="workSupervisor" maxlength="100" placeholder="Supervising person"></label></div>
           <label>Description<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
-          <button class="primary" type="submit">Save Work Entry</button>
+          <p class="muted">Leave quantity blank to save Pending Details. Complete it later before Manager review.</p><button class="primary" type="submit">Save Work Entry</button>
         </form>
       </div>
     </section>
@@ -248,6 +248,7 @@
     </section>
   </main>
 
+  <dialog id="completeDialog" class="correction-dialog"><form id="completeForm"><h2>Complete Entry</h2><p id="completeDescription" class="muted"></p><label>Quantity<input id="completeQty" type="number" min="0.01" step="0.01" required></label><p id="completeUnitLabel" class="muted"></p><div class="actions"><button class="primary" type="submit">Submit for Review</button><button class="secondary" id="completeCancel" type="button">Cancel</button></div></form></dialog>
   <dialog id="correctionDialog" class="correction-dialog">
     <form id="correctionForm" method="dialog">
       <div class="section-head">
@@ -269,6 +270,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-normalized-01"></script>
+  <script type="module" src="./app.js?v=20261012-pendingdetails-01"></script>
 </body>
 </html>
