@@ -26,22 +26,22 @@ const itemConfig=name=>state.items.find(i=>itemName(i)===name);
 const itemUnit=name=>itemConfig(name)?.unit||'';
 const itemRecoverable=name=>!!itemConfig(name)?.recoverable;
 function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
-async function serverWrite(action,payload){if(!navigator.onLine)throw Error('AUS requires internet');if(!fb.callable)throw Error('Backend unavailable');const result=await fb.callable({action,payload});return result.data}
-async function persistSettings(){return serverWrite('settings',{items:state.items,units:state.units,measures:state.measures})}
-async function persistAssetType(t){return serverWrite('assetType',t)}
-async function persistAsset(a){return serverWrite('asset',a)}
-async function persistRecord(r){return serverWrite('record',r)}
-async function persistMovement(m){return serverWrite('movement',m)}
+async function persistSettings(){
+ await fb.setDoc(fb.doc(fb.db,'settings','global'),{items:state.items,units:state.units,measures:state.measures,updatedBy:currentUser.uid,updatedAt:new Date().toISOString()},{merge:true});
+}
+async function persistAssetType(t){await fb.setDoc(fb.doc(fb.db,'assetTypes',t.id),{name:t.name,fields:t.fields})}
+async function persistAsset(a){await fb.setDoc(fb.doc(fb.db,'assets',a.id),{name:a.name,typeId:a.typeId,meta:a.meta||{}})}
+async function persistRecord(r){const data={...r};delete data.id;delete data.kind;await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data)}
+async function persistMovement(m){const data={...m};delete data.id;await fb.setDoc(fb.doc(fb.db,'stockMovements',m.id),data)}
 async function refreshServerState(){await loadFirebaseState();save()}
 async function loadFirebaseState(){
-  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap,balanceSnap]=await Promise.all([
+  const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
     fb.getDocsFromServer(fb.collection(fb.db,'assetTypes')),
     fb.getDocsFromServer(fb.collection(fb.db,'assets')),
     fb.getDocsFromServer(fb.collection(fb.db,'usageRecords')),
     fb.getDocsFromServer(fb.collection(fb.db,'workRecords')),
     fb.getDocFromServer(fb.doc(fb.db,'settings','global')),
-    fb.getDocsFromServer(fb.collection(fb.db,'stockMovements')),
-    fb.getDocsFromServer(fb.collection(fb.db,'stockBalances'))
+    fb.getDocsFromServer(fb.collection(fb.db,'stockMovements'))
   ]);
   state={
     assetTypes:typeSnap.docs.map(d=>({id:d.id,...d.data()})),
@@ -50,14 +50,19 @@ async function loadFirebaseState(){
     measures:settingsSnap.exists()&&Array.isArray(settingsSnap.data().measures)?settingsSnap.data().measures:[],
     assets:assetSnap.docs.map(d=>({id:d.id,...d.data()})),
     movements:movementSnap.docs.map(d=>({id:d.id,...d.data()})),
-    balances:balanceSnap.docs.map(d=>d.data()),
     records:[
       ...usageSnap.docs.map(d=>({id:d.id,kind:'usage',...d.data()})),
       ...workSnap.docs.map(d=>({id:d.id,kind:'work',...d.data()}))
     ]
   };
 }
-async function seedFirebaseDefaults(){if(currentRole==='manager')await serverWrite('seed',{})}
+async function seedFirebaseDefaults(){
+ if(currentRole!=='manager')return;
+ const settingsRef=fb.doc(fb.db,'settings','global');
+ const snap=await fb.getDocFromServer(settingsRef);
+ if(!snap.exists())await fb.setDoc(settingsRef,{items:structuredClone(defaults.items),units:[...defaults.units],measures:[...defaults.measures],updatedBy:currentUser.uid,updatedAt:new Date().toISOString()});
+ for(const t of defaults.assetTypes){const ref=fb.doc(fb.db,'assetTypes',t.id);if(!(await fb.getDocFromServer(ref)).exists())await persistAssetType(t)}
+}
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -88,16 +93,14 @@ function showShell(){
   applyRoleUI();
 }
 async function initFirebase(){
-  const [A,U,F,Fn]=await Promise.all([
+  const [A,U,F]=await Promise.all([
     import('https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js'),
     import('https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js'),
-    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js'),
-    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-functions.js')
+    import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js')
   ]);
   const app=A.initializeApp(firebaseConfig);
   fb.auth=U.getAuth(app); fb.db=F.getFirestore(app);
   await U.setPersistence(fb.auth,U.inMemoryPersistence);
-  fb.callable=Fn.httpsCallable(Fn.getFunctions(app,'asia-southeast1'),'ausWrite');
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
     if(!user){currentUser=null;currentRole='';showLogin();return}
@@ -113,6 +116,7 @@ async function initFirebase(){
       currentUser=user; currentRole=role;
       showShell();
       try {
+        await seedFirebaseDefaults();
         await loadFirebaseState();
         save();
         $('setupBanner').classList.add('hidden');
@@ -264,8 +268,17 @@ function updateBulkReview(){
     master.indeterminate=checked.length>0&&checked.length<boxes.length;
   }
 }
-async function setRecordStatus(id,status){const r=state.records.find(x=>x.id===id);if(!r)return;await serverWrite('review',{id:r.id,kind:r.kind,status});await refreshServerState()}
-async function markSelectedChecked(){const selected=[...document.querySelectorAll('#recordsTable .record-select:checked')];for(const x of selected){const r=state.records.find(v=>v.id===x.value);if(r)await serverWrite('review',{id:r.id,kind:r.kind,status:'checked'})}await refreshServerState()}
+async function setRecordStatus(id,status){
+ if(currentRole!=='manager')return;
+ const r=state.records.find(x=>x.id===id);if(!r)return;
+ const next={...r,status,reviewedBy:currentUser.uid,reviewedAt:new Date().toISOString()};
+ await persistRecord(next);await refreshServerState();
+}
+async function markSelectedChecked(){
+ if(currentRole!=='manager')return;
+ const selected=[...document.querySelectorAll('#recordsTable .record-select:checked')];
+ for(const x of selected)await setRecordStatus(x.value,'checked');
+}
 function openCorrection(id){
   const r=state.records.find(x=>x.id===id);if(!r)return;
   $('correctionRecordId').value=id;
@@ -279,7 +292,18 @@ function openCorrection(id){
   }
   $('correctionDialog').showModal();
 }
-async function saveCorrection(e){e.preventDefault();const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;const payload={id:r.id,kind:r.kind,qty:Number($('correctQty').value),note:$('correctionNote').value.trim()};if(r.kind==='usage'){payload.item=$('correctItem').value;payload.recoveredQty=itemRecoverable(payload.item)?Number($('correctRecovered')?.value||0):0}else payload.measure=$('correctMeasure').value;await serverWrite('correct',payload);$('correctionDialog').close();await refreshServerState()}
+async function saveCorrection(e){
+ e.preventDefault();if(currentRole!=='manager')return;
+ const r=state.records.find(x=>x.id===$('correctionRecordId').value);if(!r)return;
+ const next={...r,original:r.original||structuredClone(r),qty:Number($('correctQty').value),correctionNote:$('correctionNote').value.trim(),correctedBy:currentUser.uid,correctedAt:new Date().toISOString(),status:'checked'};
+ if(!Number.isFinite(next.qty)||next.qty<=0)return alert('Quantity must be positive.');
+ if(r.kind==='usage'){
+  next.item=$('correctItem').value;next.unit=itemUnit(next.item);
+  next.recoveredQty=itemRecoverable(next.item)?Number($('correctRecovered')?.value||0):0;
+  if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>next.qty)return alert('Invalid recovered quantity.');
+ }else next.measure=$('correctMeasure').value;
+ await persistRecord(next);$('correctionDialog').close();await refreshServerState();
+}
 function reportRows(){
   const item=$('reportItem').value;
   return state.records
@@ -414,8 +438,7 @@ function stockSummaryData(){
   const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.qty||0),0);
   const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
   const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
-  const confirmed=state.balances?.find(b=>b.item===item);
-  return {item,unit,ins,outs,balance:confirmed?Number(confirmed.available):ins-outs,recoveredIn,recoveredOut,recoveredBalance:confirmed?Number(confirmed.recovered):recoveredIn-recoveredOut,recoverable:!!i.recoverable};
+  return {item,unit,ins,outs,balance:ins-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
  });
 }
 function renderStockReports(){
@@ -559,7 +582,7 @@ document.addEventListener('click',async e=>{
   if(a){
     const id=a.dataset.deleteAsset;
     if(state.records.some(r=>r.assetId===id)){alert('This asset already has records and cannot be removed.');return}
-    await serverWrite('removeAsset',{id});
+    await fb.deleteDoc(fb.doc(fb.db,'assets',id));
     state.assets=state.assets.filter(x=>x.id!==id);
     save();
   }
@@ -581,7 +604,9 @@ $('usageForm').addEventListener('submit',async e=>{
   if(!unit||!Number.isFinite(qty)||qty<=0)return alert('Select a configured item and positive quantity.');
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return alert('Recovered quantity must be between zero and usage quantity.');
-  // Server enforces stock balance atomically.
+  // Inform users when no sufficient stock has been entered.
+  const available=stockSummaryData().find(x=>x.item===item)?.balance||0;
+  if(qty>available&&!confirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
   const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
