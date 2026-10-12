@@ -84,6 +84,28 @@ function uiDialog(title,value='',confirmOnly=false){
 }
 const uiPrompt=(title,value)=>uiDialog(title,value,false);
 const uiConfirm=title=>uiDialog(title,'',true);
+function editUsageItem(item,hasHistory){
+ return new Promise(resolve=>{
+  const modal=$('usageItemModal'),form=$('usageItemEditForm');
+  const name=$('usageItemEditName'),unit=$('usageItemEditUnit'),recovery=$('usageItemEditRecoverable');
+  name.value=itemName(item);name.readOnly=hasHistory;
+  unit.innerHTML=state.units.map(u=>'<option value="'+esc(u)+'">'+esc(u)+'</option>').join('');
+  unit.value=item.unit||'';unit.disabled=hasHistory;
+  recovery.checked=!!item.recoverable;
+  $('usageItemHistoryNote').classList.toggle('hidden',!hasHistory);
+  modal.classList.remove('hidden');
+  const finish=value=>{modal.classList.add('hidden');form.onsubmit=null;$('usageItemEditCancel').onclick=null;resolve(value)};
+  form.onsubmit=e=>{
+   e.preventDefault();
+   const n=name.value.trim(),u=unit.value;
+   if(!n||!state.units.includes(u)){notify('Enter an item name and choose a configured unit.');return}
+   finish({name:n,unit:u,recoverable:recovery.checked});
+  };
+  $('usageItemEditCancel').onclick=()=>finish(null);
+  name.focus();
+ });
+}
+
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
@@ -569,16 +591,15 @@ document.addEventListener('click',async e=>{
   }
 
   const itemBtn=e.target.closest('[data-edit-item]');
-  if(itemBtn){const i=state.items[Number(itemBtn.dataset.editItem)];if(!i)return;
-    const name=await uiPrompt('Item name',itemName(i));if(name===null||!name.trim())return;
-    if(name.trim()!==itemName(i)&&state.items.some(j=>itemName(j).toLowerCase()===name.trim().toLowerCase()))return notify('Item already exists.');
+  if(itemBtn){
+    const i=state.items[Number(itemBtn.dataset.editItem)];if(!i)return;
     const hasHistory=state.records.some(r=>r.item===itemName(i))||state.movements.some(m=>m.item===itemName(i));
-    if(hasHistory&&(name.trim()!==itemName(i)))return notify('Item name is locked once transactions exist.');
-    const unit=await uiPrompt('Unit (must already exist in Units settings)',i.unit||'');if(unit===null)return;
-    if(!state.units.includes(unit.trim()))return notify('Choose an existing unit.');
-    if(hasHistory&&unit.trim()!==i.unit)return notify('Unit is locked after transactions exist.');
-    const recoverable=await uiConfirm('Enable recovered-item tracking for '+name.trim()+'?\nOK = Yes, Cancel = No');
-    i.name=name.trim();i.unit=unit.trim();i.recoverable=recoverable;await persistSettings();save();return;
+    const result=await editUsageItem(i,hasHistory);
+    if(!result)return;
+    if(state.items.some(j=>j!==i&&itemName(j).toLowerCase()===result.name.toLowerCase()))return notify('Item already exists.');
+    i.name=result.name;i.unit=result.unit;i.recoverable=result.recoverable;
+    try{await persistSettings();save();notify('Usage Item updated.')}catch(err){await refreshServerState();notify('Save failed: '+(err.message||err))}
+    return;
   }
   const simpleBtn=e.target.closest('[data-edit-simple]');
   if(simpleBtn){
