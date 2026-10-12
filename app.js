@@ -266,15 +266,15 @@ function recordDetail(r){
   return r.kind==='usage'?(r.trackQuantity===false?r.item:r.item+' · '+r.qty+' '+r.unit):r.qty+' '+r.measure;
 }
 function recordReference(r){
-  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):[r.performedBy&&'Performed by: '+r.performedBy,r.job&&'Job / Ref: '+r.job].filter(Boolean).join(' · ');
+  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):[(r.operator||r.performedBy)&&'Operator: '+(r.operator||r.performedBy),r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · ');
 }
-function recordRemarks(r){return r.remarks||'';}
+function recordRemarks(r){return [r.remarks,r.kind==='work'&&r.job?'Job / Ref: '+r.job:''].filter(Boolean).join(' · ');}
 function recordsTable(records){
   if(!records.length)return '<div class="empty">No matching records.</div>';
   const manager=currentRole==='manager';
   const selectHead=manager?'<th class="select-col"><input id="selectVisibleRecords" type="checkbox" aria-label="Select reviewable records"></th>':'';
   const reviewHead=manager?'<th>Review</th>':'';
-  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Detail</th><th>Status</th><th>Purpose / Remarks</th><th>Sign / Reference</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
+  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th><th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
     const status=r.status||'pending';
     const reviewable=status!=='checked'&&status!=='void';
@@ -380,7 +380,7 @@ function reportAssetGroups(records){
 function reportRowsTable(records,kind){
   if(!records.length)return '';
   const label=kind==='usage'?'Usage':'Work';
-  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th>Purpose / Remarks</th><th>Sign / Reference</th></tr></thead><tbody>'+records.map(r=>
+  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Activity / Quantity</th><th>Description</th><th>Personnel</th></tr></thead><tbody>'+records.map(r=>
     '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
   ).join('')+'</tbody></table></div>';
 }
@@ -416,12 +416,12 @@ function reportMatrix(){
     aoa.push([g.name]);
     if(g.usage.length){
       aoa.push(['Usage']);
-      aoa.push(['Date','Type','Detail','Purpose / Remarks','Sign / Reference']);
+      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
       g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(g.work.length){
       aoa.push(['Work']);
-      aoa.push(['Date','Type','Detail','Purpose / Remarks','Sign / Reference']);
+      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
       g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(gi<groups.length-1)aoa.push([]);
@@ -673,7 +673,7 @@ $('usageForm').addEventListener('submit',async e=>{
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),performedBy:$('workPerformedBy').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:Number($('workQty').value),job:$('workJob').value.trim(),operator:$('workPerformedBy').value.trim(),supervisor:$('workSupervisor').value.trim(),remarks:$('workRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
