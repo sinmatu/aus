@@ -400,8 +400,14 @@ async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
-  const xs=[14,52,86,132,233];
-  rows.slice(1).forEach(row=>{if(y>190){doc.addPage();y=14}row.forEach((v,i)=>{if(v!==undefined&&v!==null&&v!=='')doc.text(String(v).slice(0,i===3?65:25),xs[i]||14,y)});y+=6});
+  const xs=[14,52,86,132,233],widths=[36,32,44,97,48];
+  rows.slice(1).forEach(row=>{
+    const cells=row.slice(0,5).map((v,i)=>doc.splitTextToSize(String(v??''),widths[i]));
+    const height=Math.max(6,...cells.map(lines=>Math.max(1,lines.length)*4+2));
+    if(y+height>195){doc.addPage();y=14}
+    cells.forEach((lines,i)=>{if(lines.length)doc.text(lines,xs[i],y)});
+    y+=height;
+  });
   doc.save('aus-report-'+($('reportMonth').value||'all')+'.pdf');
 }
 $('exportExcel').addEventListener('click',exportExcel);
