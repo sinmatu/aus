@@ -458,6 +458,18 @@ function syncUsageItem(){
 }
 $('usageItem').addEventListener('change',syncUsageItem);
 $('usageQty').addEventListener('input',()=>{if(itemRecoverable($('usageItem').value))$('usageRecoveredQty').value=String(Number($('usageQty').value)||0)});
+function syncUsageSource(){
+ const immediate=$('usageSource').value==='immediate';
+ $('usageImmediateFields').classList.toggle('hidden',!immediate);
+ $('usageReceivedQty').required=immediate;
+ if(immediate&&!$('usageReceivedQty').value)$('usageReceivedQty').value=$('usageQty').value||'';
+}
+$('usageSource').addEventListener('change',syncUsageSource);
+$('usageQty').addEventListener('input',()=>{
+ if($('usageSource').value==='immediate'&&!$('usageReceivedQty').dataset.edited)$('usageReceivedQty').value=$('usageQty').value;
+});
+$('usageReceivedQty').addEventListener('input',()=>{$('usageReceivedQty').dataset.edited='yes'});
+
 $('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('stockItem').value)});
 async function createMovement(entry){const m={id:uid('mov'),...entry,createdAt:new Date().toISOString(),createdBy:currentUser?.uid||''};await persistMovement(m);await refreshServerState()}
 $('stockForm').addEventListener('submit',async e=>{
@@ -476,10 +488,11 @@ function stockSummaryData(){
  return state.items.map(i=>{
   const item=itemName(i),unit=i.unit;
   const ins=state.movements.filter(m=>m.type==='in'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
+  const directIns=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.receivedQty||0),0);
   const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.qty||0),0);
   const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
   const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
-  return {item,unit,ins,outs,balance:ins-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
+  return {item,unit,ins:ins+directIns,outs,balance:ins+directIns-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
  });
 }
 function renderStockReports(){
@@ -487,10 +500,11 @@ function renderStockReports(){
  const filtered=data.filter(x=>!chosen||x.item===chosen);
  // Balances are all-time; movement quantities respect the selected month.
  const tbody=filtered.map(x=>{
- const ins=state.movements.filter(m=>m.type==='in'&&m.item===x.item&&(!month||m.date.startsWith(month))).reduce((n,m)=>n+Number(m.qty),0);
+ const movementIns=state.movements.filter(m=>m.type==='in'&&m.item===x.item&&(!month||m.date.startsWith(month))).reduce((n,m)=>n+Number(m.qty),0);
+ const ins=movementIns+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.receivedQty||0),0);
  const outs=state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
  const periodStart=month?month+'-01':'';
- const opening=periodStart?state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
+ const opening=periodStart?(state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.receivedQty||0),0))-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
  // With an asset filter, show quantities for that asset, but don't label the warehouse balance as an asset balance.
  const stockBalance=$('reportAsset').value?'—':opening+ins-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
  return '<tr><td>'+esc(x.item)+'</td><td>'+esc(x.unit)+'</td><td>'+($('reportAsset').value?'—':opening)+'</td><td>'+ins+'</td><td>'+outs+'</td><td>'+stockBalance+'</td></tr>';
@@ -645,12 +659,15 @@ $('usageForm').addEventListener('submit',async e=>{
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
-  const available=stockSummaryData().find(x=>x.item===item)?.balance||0;
+  const immediate=$('usageSource').value==='immediate';
+  const receivedQty=immediate?Number($('usageReceivedQty').value):0;
+  if(immediate&&(!Number.isFinite(receivedQty)||receivedQty<=0))return notify('Enter a positive quantity received.');
+  const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
   if(qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,receivedQty,stockSource:immediate?'immediate':'warehouse',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
-  e.target.reset(); $('usageDate').value=today(); syncUsageItem();save(); notify('Usage record saved.');
+  e.target.reset(); $('usageDate').value=today();delete $('usageReceivedQty').dataset.edited;syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
 });
 $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
