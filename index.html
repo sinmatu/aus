@@ -20,7 +20,7 @@
 
   <div id="ausNotice" class="aus-notice hidden" role="status"></div>
   <div id="ausModal" class="aus-modal hidden"><form id="ausModalForm" class="aus-modal-card"><h3 id="ausModalTitle"></h3><input id="ausModalInput" type="text" maxlength="300"><div class="aus-modal-actions"><button id="ausModalCancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Confirm</button></div></form></div>
-  <div id="usageItemModal" class="aus-modal hidden"><form id="usageItemEditForm" class="aus-modal-card"><h3>Edit Usage Item</h3><label>Item name<input id="usageItemEditName" type="text" maxlength="60" required></label><label>Assigned unit<select id="usageItemEditUnit" required></select></label><label class="aus-recovery-toggle"><input id="usageItemEditRecoverable" type="checkbox"> Enable recovered-item tracking</label><p id="usageItemHistoryNote" class="muted hidden">Name and unit are locked because transactions already exist.</p><div class="aus-modal-actions"><button id="usageItemEditCancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Save changes</button></div></form></div>
+  <div id="usageItemModal" class="aus-modal hidden"><form id="usageItemEditForm" class="aus-modal-card"><h3>Edit Usage Item</h3><label>Item name<input id="usageItemEditName" type="text" maxlength="60" required></label><label class="aus-recovery-toggle"><input id="usageItemEditTracking" type="checkbox"> Track quantity and unit</label><label>Assigned unit<select id="usageItemEditUnit"></select></label><label class="aus-recovery-toggle"><input id="usageItemEditRecoverable" type="checkbox"> Enable recovered-item tracking</label><p id="usageItemHistoryNote" class="muted hidden">Name and unit are locked because transactions already exist.</p><div class="aus-modal-actions"><button id="usageItemEditCancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Save changes</button></div></form></div>
   <main>
     <section id="loginView" class="panel login-panel">
       <h2>Sign in</h2>
@@ -208,7 +208,7 @@
             <div>
               <h3>Usage Items · Unit assigned</h3>
               <p class="muted">Items available to the universal Usage Entry form.</p>
-              <form id="itemForm"><input id="itemName" placeholder="e.g. Diesel" maxlength="60" required><label>Assigned Unit<select id="itemUnit" required></select></label><label class="inline-check"><input id="itemRecoverable" type="checkbox"> Track recovered old items</label><button class="secondary" type="submit">Add Usage Item</button></form>
+              <form id="itemForm"><input id="itemName" placeholder="e.g. Diesel" maxlength="60" required><label class="inline-check"><input id="itemTrackQuantity" type="checkbox" checked> Track quantity and unit</label><label>Assigned Unit<select id="itemUnit"></select></label><label class="inline-check"><input id="itemRecoverable" type="checkbox"> Track recovered old items</label><button class="secondary" type="submit">Add Usage Item</button></form>
               <div id="itemList" class="chips"></div>
 
               <h3 class="subsection">Units</h3>
@@ -268,6 +268,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261012-immediate-02"></script>
+  <script type="module" src="./app.js?v=20261012-quantitymode-01"></script>
 </body>
 </html>
