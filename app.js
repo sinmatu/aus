@@ -290,7 +290,7 @@ function recordsTable(records){
     }
     const canComplete=status==='pending_details'&&(currentRole==='manager'||r.createdBy===currentUser?.uid);
     const completion=canComplete?'<button type="button" class="record-action" data-complete="1">Complete Entry</button>':'';
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
