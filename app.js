@@ -24,7 +24,8 @@ function save(){
 const itemName=i=>typeof i==='string'?i:i.name;
 const itemConfig=name=>state.items.find(i=>itemName(i)===name);
 const itemUnit=name=>itemConfig(name)?.unit||'';
-const itemRecoverable=name=>!!itemConfig(name)?.recoverable;
+const itemMeasured=name=>itemConfig(name)?.trackQuantity!==false;
+const itemRecoverable=name=>itemMeasured(name)&&!!itemConfig(name)?.recoverable;
 function recordCollection(r){return r.kind==='usage'?'usageRecords':'workRecords'}
 async function persistSettings(){
  await fb.setDoc(fb.doc(fb.db,'settings','global'),{items:state.items,units:state.units,measures:state.measures,updatedBy:currentUser.uid,updatedAt:new Date().toISOString()},{merge:true});
@@ -91,15 +92,17 @@ function editUsageItem(item,hasHistory){
   name.value=itemName(item);name.readOnly=hasHistory;
   unit.innerHTML=state.units.map(u=>'<option value="'+esc(u)+'">'+esc(u)+'</option>').join('');
   unit.value=item.unit||'';unit.disabled=hasHistory;
+  const tracking=$('usageItemEditTracking');tracking.checked=item.trackQuantity!==false;
   recovery.checked=!!item.recoverable;
+  const syncTracking=()=>{unit.disabled=hasHistory||!tracking.checked;recovery.disabled=!tracking.checked;if(!tracking.checked)recovery.checked=false};tracking.onchange=syncTracking;syncTracking();
   $('usageItemHistoryNote').classList.toggle('hidden',!hasHistory);
   modal.classList.remove('hidden');
-  const finish=value=>{modal.classList.add('hidden');form.onsubmit=null;$('usageItemEditCancel').onclick=null;resolve(value)};
+  const finish=value=>{modal.classList.add('hidden');form.onsubmit=null;$('usageItemEditCancel').onclick=null;tracking.onchange=null;resolve(value)};
   form.onsubmit=e=>{
    e.preventDefault();
    const n=name.value.trim(),u=unit.value;
-   if(!n||!state.units.includes(u)){notify('Enter an item name and choose a configured unit.');return}
-   finish({name:n,unit:u,recoverable:recovery.checked});
+   if(!n||(tracking.checked&&!state.units.includes(u))){notify('Enter an item name and choose a configured unit.');return}
+   finish({name:n,unit:tracking.checked?u:'',recoverable:tracking.checked&&recovery.checked,trackQuantity:tracking.checked});
   };
   $('usageItemEditCancel').onclick=()=>finish(null);
   name.focus();
@@ -226,7 +229,7 @@ function renderDefinitions(){
     '<div class="definition-actions"><button type="button" class="edit-link" data-edit-type-name="'+esc(t.id)+'">Edit Name</button>'+
     '<button type="button" class="edit-link" data-edit-type-meta="'+esc(t.id)+'">Edit Metadata</button></div></div>'
   ).join(''):'<div class="empty">No asset types yet.</div>';
-  $('itemList').innerHTML=state.items.map((i,index)=>'<div class="stack-row editable-row"><div><b>'+esc(itemName(i))+'</b><small>'+esc(i.unit||'Unit not set')+(i.recoverable?' · Recovery enabled':'')+'</small></div><button type="button" class="edit-link" data-edit-item="'+index+'">Edit</button></div>').join('');
+  $('itemList').innerHTML=state.items.map((i,index)=>'<div class="stack-row editable-row"><div><b>'+esc(itemName(i))+'</b><small>'+(i.trackQuantity===false?'No quantity / unit':esc(i.unit||'Unit not set'))+(i.recoverable&&i.trackQuantity!==false?' · Recovery enabled':'')+'</small></div><button type="button" class="edit-link" data-edit-item="'+index+'">Edit</button></div>').join('');
   renderChips('unitList',state.units,'units');
   renderChips('measureList',state.measures,'measures');
 }
@@ -260,7 +263,7 @@ function renderAssetProfiles(){
   }).join('');
 }
 function recordDetail(r){
-  return r.kind==='usage'?r.item+' · '+r.qty+' '+r.unit:r.measure+' · '+r.qty;
+  return r.kind==='usage'?(r.trackQuantity===false?r.item+' · Description only':r.item+' · '+r.qty+' '+r.unit):r.measure+' · '+r.qty;
 }
 function recordReference(r){
   return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):(r.job||'');
@@ -452,14 +455,19 @@ $('exportPdf').addEventListener('click',exportPdf);
 
 
 function syncUsageItem(){
- const name=$('usageItem').value;$('usageUnit').value=itemUnit(name);
+ const name=$('usageItem').value,measured=itemMeasured(name);$('usageUnit').value=measured?itemUnit(name):'';
+ $('usageQty').closest('label').classList.toggle('hidden',!measured);
+ $('usageUnit').closest('label').classList.toggle('hidden',!measured);
+ $('usageQty').required=measured;
+ $('usageSource').closest('.usage-source-panel').classList.toggle('hidden',!measured);
+ $('usageRemarks').required=!measured;
  const active=itemRecoverable(name);$('usageRecovery').classList.toggle('hidden',!active);
- $('usageRecoveredQty').value=active?String(Number($('usageQty').value)||0):'0';
+ $('usageRecoveredQty').value=active?String(Number($('usageQty').value)||0):'0';syncUsageSource();
 }
 $('usageItem').addEventListener('change',syncUsageItem);
 $('usageQty').addEventListener('input',()=>{if(itemRecoverable($('usageItem').value))$('usageRecoveredQty').value=String(Number($('usageQty').value)||0)});
 function syncUsageSource(){
- $('usageImmediateFields').classList.toggle('hidden',$('usageSource').value!=='immediate');
+ $('usageImmediateFields').classList.toggle('hidden',!itemMeasured($('usageItem').value)||$('usageSource').value!=='immediate');
 }
 $('usageSource').addEventListener('change',syncUsageSource);
 $('stockItem').addEventListener('change',()=>{$('stockUnit').value=itemUnit($('stockItem').value)});
@@ -477,7 +485,7 @@ $('recoveryForm').addEventListener('submit',async e=>{
  await createMovement({type:'recovered-out',item,unit:itemUnit(item),qty,date:$('recoveryDate').value,reason:$('recoveryReason').value,remarks:$('recoveryRemarks').value.trim()});e.target.reset();$('recoveryDate').value=today();notify('Recovered stock out saved.');
 });
 function stockSummaryData(){
- return state.items.map(i=>{
+ return state.items.filter(i=>i.trackQuantity!==false).map(i=>{
   const item=itemName(i),unit=i.unit;
   const ins=state.movements.filter(m=>m.type==='in'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
   const directIns=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void').reduce((n,r)=>n+Number(r.receivedQty||0),0);
@@ -541,9 +549,10 @@ $('assetTypeForm').addEventListener('submit',async e=>{
 });
 $('itemForm').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('itemName').value.trim(),unit=$('itemUnit').value;
-  if(!name||!unit)return notify('Name and unit are required.');
+  const trackQuantity=$('itemTrackQuantity').checked;
+  if(!name||(trackQuantity&&!unit))return notify('Name and unit are required for tracked items.');
   if(state.items.some(i=>itemName(i).toLowerCase()===name.toLowerCase()))return notify('Item already exists.');
-  state.items.push({name,unit,recoverable:$('itemRecoverable').checked});await persistSettings();e.target.reset();save();
+  state.items.push({name,unit:trackQuantity?unit:'',trackQuantity,recoverable:trackQuantity&&$('itemRecoverable').checked});await persistSettings();e.target.reset();save();
 });
 $('unitForm').addEventListener('submit',e=>addSimple(e,'unitName','units'));
 $('measureForm').addEventListener('submit',e=>addSimple(e,'measureName','measures'));
@@ -603,7 +612,7 @@ document.addEventListener('click',async e=>{
     const result=await editUsageItem(i,hasHistory);
     if(!result)return;
     if(state.items.some(j=>j!==i&&itemName(j).toLowerCase()===result.name.toLowerCase()))return notify('Item already exists.');
-    i.name=result.name;i.unit=result.unit;i.recoverable=result.recoverable;
+    i.name=result.name;i.unit=result.unit;i.recoverable=result.recoverable;i.trackQuantity=result.trackQuantity;
     try{await persistSettings();save();notify('Usage Item updated.')}catch(err){await refreshServerState();notify('Save failed: '+(err.message||err))}
     return;
   }
@@ -647,15 +656,17 @@ $('assetForm').addEventListener('submit',async e=>{
 $('usageForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const item=$('usageItem').value,qty=Number($('usageQty').value),unit=itemUnit(item);
-  if(!unit||!Number.isFinite(qty)||qty<=0)return notify('Select a configured item and positive quantity.');
+  const measured=itemMeasured(item);
+  if(measured&&(!unit||!Number.isFinite(qty)||qty<=0))return notify('Select a configured item and positive quantity.');
+  if(!measured&&!$('usageRemarks').value.trim())return notify('Purpose / Remarks is required for non-quantity items.');
   const returned=itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||returned>qty)return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
-  const immediate=$('usageSource').value==='immediate';
+  const immediate=measured&&$('usageSource').value==='immediate';
   const receivedQty=immediate?qty:0;
   const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
-  if(qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty,unit,receivedQty,stockSource:immediate?'immediate':'warehouse',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  if(measured&&qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('usageDate').value=today();syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
