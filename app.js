@@ -533,6 +533,10 @@ function reportRowsTable(records,kind){
     '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
   ).join('')+'</tbody></table></div>';
 }
+function amountTotals(records){
+ const priced=records.filter(r=>r.kind==='usage'&&r.amount!=null&&r.amount!==''&&Number.isFinite(Number(r.amount)));
+ return {cents:priced.reduce((n,r)=>n+Math.round(Number(r.amount)*100),0),unpriced:records.filter(r=>r.kind==='usage').length-priced.length};
+}
 function reportTable(records){
   if(!records.length)return '<div class="empty">No matching report records.</div>';
   const groups=reportAssetGroups(records);
@@ -540,6 +544,7 @@ function reportTable(records){
     '<section class="report-asset-group"><h3>'+esc(g.name)+'</h3>'+
     reportRowsTable(g.usage,'usage')+
     reportRowsTable(g.work,'work')+
+    '<div class="report-cost-subtotal"><strong>Asset subtotal: '+esc(money(amountTotals(g.usage).cents/100))+'</strong>'+(amountTotals(g.usage).unpriced?' · '+amountTotals(g.usage).unpriced+' unpriced entries':'')+'</div>'+
     '</section>'
   ).join('');
 }
@@ -549,7 +554,8 @@ function renderReports(){
   const usage=rows.filter(r=>r.kind==='usage');
   const work=rows.filter(r=>r.kind==='work');
   const assetCount=new Set(rows.map(r=>r.assetId)).size;
-  $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Assets involved</span><b>'+assetCount+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div></div>';
+  const financial=amountTotals(rows);
+  $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Assets involved</span><b>'+assetCount+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div><div class="summary-card"><span class="muted">Usage grand total</span><b>'+money(financial.cents/100)+'</b><small class="muted">'+(financial.unpriced?financial.unpriced+' unpriced usage entries':'All recorded amounts included')+'</small></div></div>';
   $('reportTable').innerHTML=reportTable(rows);
   renderStockReports();
 }
@@ -561,6 +567,9 @@ function reportMatrix(){
   aoa.push([],['Recovered Items'],['Item','Unit','Recovered In','Recovered Out','Balance']);
   stockSummaryData().filter(x=>x.recoverable&&(!$('reportItem').value||x.item===$('reportItem').value)).forEach(x=>aoa.push([x.item,x.unit,x.recoveredIn,x.recoveredOut,x.recoveredBalance]));aoa.push([]);
   const groups=reportAssetGroups(rows);
+  aoa.push(['Usage Cost Summary'],['Asset','Amount (RM)','Unpriced Usage Entries']);
+  groups.forEach(g=>{const t=amountTotals(g.usage);aoa.push([g.name,t.cents/100,t.unpriced])});
+  const grand=amountTotals(rows);aoa.push(['Grand total',grand.cents/100,grand.unpriced],[]);
   groups.forEach((g,gi)=>{
     aoa.push([g.name]);
     if(g.usage.length){
@@ -573,6 +582,7 @@ function reportMatrix(){
       aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
       g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
     }
+    const subtotal=amountTotals(g.usage);aoa.push(['Asset subtotal',subtotal.cents/100,subtotal.unpriced+' unpriced usage entries']);
     if(gi<groups.length-1)aoa.push([]);
   });
   return aoa;
