@@ -82,7 +82,7 @@
             <label>Quantity<input id="usageQty" type="number" min="0.01" step="0.01"></label>
             <label>Unit<input id="usageUnit" readonly placeholder="Auto assigned by item"></label>
           </div>
-          <div id="usageRecovery" class="recovery-inline hidden"><label>Old items returned to warehouse<input id="usageRecoveredQty" type="number" min="0" step="1" value="0"></label><small>Prefilled to match quantity on replacement. Change to 0 if none returned.</small></div>
+          <div class="grid two"><label>Unit price (RM)<input id="usageUnitPrice" type="number" min="0" step="0.0001" placeholder="Optional"></label><label>Total amount (RM)<input id="usageTotalAmount" type="text" readonly placeholder="Calculated automatically"></label></div><div id="usageRecovery" class="recovery-inline hidden"><label>Old items returned to warehouse<input id="usageRecoveredQty" type="number" min="0" step="1" value="0"></label><small>Prefilled to match quantity on replacement. Change to 0 if none returned.</small></div>
           <div class="usage-source-panel">
             <label>Stock source
               <select id="usageSource">
@@ -248,7 +248,7 @@
     </section>
   </main>
 
-  <dialog id="completeDialog" class="correction-dialog"><form id="completeForm"><h2>Complete Entry</h2><p id="completeDescription" class="muted"></p><label>Quantity<input id="completeQty" type="number" min="0.01" step="0.01" required></label><p id="completeUnitLabel" class="muted"></p><label id="completeRecoveredWrap" class="hidden">Old items recovered<input id="completeRecovered" type="number" min="0" step="1" value="0"></label><div class="actions"><button class="primary" type="submit">Submit for Review</button><button class="secondary" id="completeCancel" type="button">Cancel</button></div></form></dialog>
+  <dialog id="completeDialog" class="correction-dialog"><form id="completeForm"><h2>Complete Entry</h2><p id="completeDescription" class="muted"></p><label>Quantity<input id="completeQty" type="number" min="0.01" step="0.01" required></label><p id="completeUnitLabel" class="muted"></p><label id="completeUnitPriceWrap" class="hidden">Unit price (RM)<input id="completeUnitPrice" type="number" min="0" step="0.0001" placeholder="Optional"></label><label id="completeRecoveredWrap" class="hidden">Old items recovered<input id="completeRecovered" type="number" min="0" step="1" value="0"></label><div class="actions"><button class="primary" type="submit">Submit for Review</button><button class="secondary" id="completeCancel" type="button">Cancel</button></div></form></dialog>
   <dialog id="correctionDialog" class="correction-dialog">
     <form id="correctionForm" method="dialog">
       <div class="section-head">
@@ -270,6 +270,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261015-monthlysync-v2"></script>
+  <script type="module" src="./app.js?v=20261015-all-usage-prices-v1"></script>
 </body>
 </html>
