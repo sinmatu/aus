@@ -18,12 +18,6 @@ const defaults={
   balances:[]
 };
 let state=structuredClone(defaults);
-let recordPage=0;
-const RECORD_PAGE_SIZE=25;
-let dataListeners=[];
-let liveRevision=0;
-function stopLiveData(){dataListeners.forEach(stop=>stop());dataListeners=[];liveRevision++;}
-
 function save(){
   renderAll();
 }
@@ -40,10 +34,7 @@ async function persistAssetType(t){await fb.setDoc(fb.doc(fb.db,'assetTypes',t.i
 async function persistAsset(a){await fb.setDoc(fb.doc(fb.db,'assets',a.id),{name:a.name,typeId:a.typeId,meta:a.meta||{}})}
 async function persistRecord(r){const data={...r};delete data.id;delete data.kind;await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data)}
 async function persistMovement(m){const data={...m};delete data.id;await fb.setDoc(fb.doc(fb.db,'stockMovements',m.id),data)}
-async function refreshServerState(){
- // A committed write triggers the active Firestore listeners; no full-history refetch.
- if(!dataListeners.length){await loadFirebaseState();save()}
-}
+async function refreshServerState(){await loadFirebaseState();save()}
 async function loadFirebaseState(){
   const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
     fb.getDocsFromServer(fb.collection(fb.db,'assetTypes')),
@@ -65,43 +56,6 @@ async function loadFirebaseState(){
       ...workSnap.docs.map(d=>({id:d.id,kind:'work',...d.data()}))
     ]
   };
-}
-function startLiveData(){
- stopLiveData();
- const revision=liveRevision;
- const sources=[
-  ['assetTypes','assetTypes'],['assets','assets'],
-  ['usageRecords','usage'],['workRecords','work'],
-  ['stockMovements','movements']
- ];
- const snapshots=new Map();
- let scheduled=false;
- const apply=()=>{
-   scheduled=false;
-   if(revision!==liveRevision||snapshots.size!==sources.length)return;
-   state.assetTypes=snapshots.get('assetTypes');
-   state.assets=snapshots.get('assets');
-   state.movements=snapshots.get('movements');
-   state.records=[...snapshots.get('usage'),...snapshots.get('work')];
-   save();
- };
- sources.forEach(([collection,key])=>{
-  const stop=fb.onSnapshot(fb.collection(fb.db,collection),snap=>{
-   if(revision!==liveRevision)return;
-   snapshots.set(key,snap.docs.map(d=>key==='usage'||key==='work'?{id:d.id,kind:key,...d.data()}:{id:d.id,...d.data()}));
-   if(!scheduled){scheduled=true;queueMicrotask(apply)}
-  },err=>notify('Live '+collection+' sync failed: '+err.message));
-  dataListeners.push(stop);
- });
- const stopSettings=fb.onSnapshot(fb.doc(fb.db,'settings','global'),snap=>{
-  if(revision!==liveRevision||!snap.exists())return;
-  const cfg=snap.data();
-  state.items=Array.isArray(cfg.items)?cfg.items.map(i=>typeof i==='string'?{name:i,unit:'',recoverable:false}:i):[];
-  state.units=Array.isArray(cfg.units)?cfg.units:[];
-  state.measures=Array.isArray(cfg.measures)?cfg.measures:[];
-  save();
- },err=>notify('Settings sync failed: '+err.message));
- dataListeners.push(stopSettings);
 }
 async function seedFirebaseDefaults(){
  if(currentRole!=='manager')return;
@@ -194,7 +148,7 @@ async function initFirebase(){
   await U.setPersistence(fb.auth,U.inMemoryPersistence);
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
-    if(!user){stopLiveData();currentUser=null;currentRole='';showLogin();return}
+    if(!user){currentUser=null;currentRole='';showLogin();return}
     try{
       const snap=await F.getDocFromServer(F.doc(fb.db,'users',user.uid));
       if(!snap.exists())throw Error('Account is not authorised for this system.');
@@ -209,7 +163,6 @@ async function initFirebase(){
       try {
         await loadFirebaseState();
         save();
-        startLiveData();
         $('setupBanner').classList.add('hidden');
       } catch (loadErr) {
         $('setupBanner').textContent='Signed in, but Firestore could not load: '+(loadErr.message||loadErr)+'. Check Firestore Rules and connection.';
@@ -346,12 +299,8 @@ function filteredRecords(month,assetId,kind){
 }
 function renderRecords(){
   const rows=filteredRecords($('recordMonth').value,$('recordAsset').value,$('recordKind').value);
-  const pages=Math.max(1,Math.ceil(rows.length/RECORD_PAGE_SIZE));
-  recordPage=Math.min(recordPage,pages-1);
-  const pageRows=rows.slice(recordPage*RECORD_PAGE_SIZE,(recordPage+1)*RECORD_PAGE_SIZE);
-  $('recordCount').textContent=rows.length+' records';
-  $('recordsTable').innerHTML=recordsTable(pageRows);
-  $('recordPaging').innerHTML=rows.length?'<span>Page '+(recordPage+1)+' of '+pages+'</span> <button type="button" class="secondary" id="recordPrev" '+(recordPage===0?'disabled':'')+'>Previous</button> <button type="button" class="secondary" id="recordNext" '+(recordPage===pages-1?'disabled':'')+'>Next</button>':'';
+  $('recordCount').textContent=rows.length+' shown';
+  $('recordsTable').innerHTML=recordsTable(rows);
   updateBulkReview();
 }
 function updateBulkReview(){
@@ -573,15 +522,8 @@ function renderMovementHistory(){
 function renderAll(){renderSelectors();renderDefinitions();renderAssets();renderMetaFields();renderAssetProfiles();renderRecords();renderReports();renderMovementHistory();$('itemUnit').innerHTML=optionList(state.units,'Select unit')}
 
 $('assetTypeSelect').addEventListener('change',renderMetaFields);
-$('recordApply').addEventListener('click',()=>{recordPage=0;renderRecords()});
-$('recordMonth').addEventListener('change',()=>{recordPage=0;renderRecords()});
-$('recordAsset').addEventListener('change',()=>{recordPage=0;renderRecords()});
-$('recordKind').addEventListener('change',()=>{recordPage=0;renderRecords()});
-$('recordPaging').addEventListener('click',e=>{
- if(e.target.closest('#recordPrev')&&recordPage>0){recordPage--;renderRecords()}
- if(e.target.closest('#recordNext')){recordPage++;renderRecords()}
-});
-$('recordSort').addEventListener('change',()=>{recordPage=0;renderRecords()});
+$('recordApply').addEventListener('click',renderRecords);
+$('recordSort').addEventListener('change',renderRecords);
 $('reportMonth').addEventListener('change',renderReports);
 $('reportAsset').addEventListener('change',renderReports);
 $('reportItem').addEventListener('change',renderReports);
