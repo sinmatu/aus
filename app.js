@@ -335,6 +335,14 @@ function renderAssetProfiles(){
       '<div class="asset-meta">'+(meta.length?meta.map(([k,v])=>'<div><span>'+esc(k)+'</span><b>'+esc(v)+'</b></div>').join(''):'<span class="muted">No additional profile information.</span>')+'</div></article>';
   }).join('');
 }
+const money=v=>v==null||!Number.isFinite(Number(v))?'—':'RM '+Number(v).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+const entryAmount=r=>r.kind!=='usage'?'—':money(r.amount);
+function cost(price,qty){
+ if(price===''||price==null)return {unitPrice:null,amount:null};
+ const unitPrice=Number(price);
+ if(!Number.isFinite(unitPrice)||unitPrice<0)return null;
+ return {unitPrice,amount:qty==null?null:Math.round(unitPrice*qty*100)/100};
+}
 function recordDetail(r){
   if(r.status==='pending_details')return r.kind==='usage'?r.item+' · Quantity pending':'Work quantity pending';
   return r.kind==='usage'?(r.trackQuantity===false?r.item:r.item+' · '+r.qty+' '+r.unit):r.qty+' '+r.measure;
@@ -348,7 +356,7 @@ function recordsTable(records){
   const manager=currentRole==='manager';
   const selectHead=manager?'<th class="select-col"><input id="selectVisibleRecords" type="checkbox" aria-label="Select reviewable records"></th>':'';
   const reviewHead=manager?'<th>Review</th>':'<th>Actions</th>';
-  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th><th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
+  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th><th>Amount</th><th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
     const status=r.status||'pending';
     const reviewable=status!=='checked'&&status!=='void'&&status!=='pending_details';
@@ -363,7 +371,7 @@ function recordsTable(records){
     }
     const canComplete=status==='pending_details'&&(currentRole==='manager'||r.createdBy===currentUser?.uid);
     const completion=canComplete?'<button type="button" class="record-action" data-complete="1">Complete Entry</button>':'';
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
@@ -409,6 +417,7 @@ function openCorrection(id){
   $('correctionNote').value=r.correctionNote||'';
   if(r.kind==='usage'){
     $('correctionFields').innerHTML='<div class="grid three"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Unit<select id="correctUnit">'+state.units.map(u=>'<option '+(u===r.unit?'selected':'')+'>'+esc(u)+'</option>').join('')+'</select></label><label>Item<select id="correctItem">'+state.items.map(i=>'<option '+(itemName(i)===r.item?'selected':'')+'>'+esc(itemName(i))+'</option>').join('')+'</select></label></div>';
+    $('correctionFields').insertAdjacentHTML('beforeend','<label>Unit price (RM)<input id="correctUnitPrice" type="number" min="0" step="0.0001" value="'+esc(r.unitPrice??'')+'"></label>');
     if(itemRecoverable(r.item))$('correctionFields').insertAdjacentHTML('beforeend','<label>Old items recovered<input id="correctRecovered" type="number" min="0" step="1" value="'+esc(r.recoveredQty||0)+'"></label>');
   }else{
     $('correctionFields').innerHTML='<div class="grid two"><label>Quantity<input id="correctQty" type="number" min="0" step="0.01" value="'+esc(r.qty)+'" required></label><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label></div>';
@@ -422,6 +431,9 @@ async function saveCorrection(e){
  if(!Number.isFinite(next.qty)||next.qty<=0)return notify('Quantity must be positive.');
  if(r.kind==='usage'){
   next.item=$('correctItem').value;next.unit=itemUnit(next.item);
+  const price=cost($('correctUnitPrice').value.trim(),next.qty);
+  if(price===null)return notify('Invalid unit price.');
+  next.unitPrice=price.unitPrice;next.amount=price.amount;
   next.recoveredQty=itemRecoverable(next.item)?Number($('correctRecovered')?.value||0):0;
   if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>next.qty)return notify('Invalid recovered quantity.');
  }else next.measure=$('correctMeasure').value;
@@ -459,8 +471,8 @@ function reportAssetGroups(records){
 function reportRowsTable(records,kind){
   if(!records.length)return '';
   const label=kind==='usage'?'Usage':'Work';
-  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Activity / Quantity</th><th>Description</th><th>Personnel</th></tr></thead><tbody>'+records.map(r=>
-    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
+  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Activity / Quantity</th><th>Amount</th><th>Description</th><th>Personnel</th></tr></thead><tbody>'+records.map(r=>
+    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
   ).join('')+'</tbody></table></div>';
 }
 function reportTable(records){
@@ -495,13 +507,13 @@ function reportMatrix(){
     aoa.push([g.name]);
     if(g.usage.length){
       aoa.push(['Usage']);
-      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
-      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
+      aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
+      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(g.work.length){
       aoa.push(['Work']);
-      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
-      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
+      aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
+      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
     }
     if(gi<groups.length-1)aoa.push([]);
   });
@@ -510,7 +522,7 @@ function reportMatrix(){
 async function exportExcel(){
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const ws=XLSX.utils.aoa_to_sheet(reportMatrix());
-  ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:65},{wch:30}];
+  ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:18},{wch:65},{wch:30}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
   XLSX.writeFile(wb,'aus-report-'+($('reportMonth').value||'all')+'.xlsx');
 }
@@ -519,9 +531,9 @@ async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
-  const xs=[14,52,86,132,233],widths=[36,32,44,97,48];
+  const xs=[14,48,78,119,151,240],widths=[32,27,38,29,85,35];
   rows.slice(1).forEach(row=>{
-    const cells=row.slice(0,5).map((v,i)=>doc.splitTextToSize(String(v??''),widths[i]));
+    const cells=row.slice(0,6).map((v,i)=>doc.splitTextToSize(String(v??''),widths[i]));
     const height=Math.max(6,...cells.map(lines=>Math.max(1,lines.length)*4+2));
     if(y+height>195){doc.addPage();y=14}
     cells.forEach((lines,i)=>{if(lines.length)doc.text(lines,xs[i],y)});
@@ -533,6 +545,9 @@ $('exportExcel').addEventListener('click',exportExcel);
 $('exportPdf').addEventListener('click',exportPdf);
 
 
+function syncUsageTotal(){const q=$('usageQty').value.trim()===''?null:Number($('usageQty').value);const p=cost($('usageUnitPrice').value.trim(),q);$('usageTotalAmount').value=p?.amount==null?'':money(p.amount)}
+$('usageUnitPrice').addEventListener('input',syncUsageTotal);
+$('usageQty').addEventListener('input',syncUsageTotal);
 function syncUsageItem(){
  const name=$('usageItem').value,measured=itemMeasured(name);$('usageUnit').value=measured?itemUnit(name):'';
  $('usageQty').closest('label').classList.toggle('hidden',!measured);
@@ -628,6 +643,8 @@ function openCompletion(id){
  const r=state.records.find(x=>x.id===id);
  if(!r||r.status!=='pending_details'||!(currentRole==='manager'||r.createdBy===currentUser?.uid))return;
  completingId=id;
+ $('completeUnitPriceWrap').classList.toggle('hidden',r.kind!=='usage');
+ $('completeUnitPrice').value=r.unitPrice??'';
  $('completeDescription').textContent=(r.kind==='usage'?r.item:'Work')+' · '+r.date;
  $('completeUnitLabel').textContent=r.kind==='usage'?'Unit: '+r.unit:'Measure: '+r.measure;
  $('completeRecoveredWrap').classList.toggle('hidden',r.kind!=='usage'||!itemRecoverable(r.item));
@@ -643,6 +660,9 @@ $('completeForm').addEventListener('submit',async e=>{
  if(!Number.isFinite(qty)||qty<=0)return notify('Enter a positive quantity.');
  const next={...r,qty,status:'pending',completedBy:currentUser.uid,completedAt:new Date().toISOString()};
  if(r.kind==='usage'){
+  const price=cost($('completeUnitPrice').value.trim(),qty);
+  if(price===null)return notify('Invalid unit price.');
+  next.unitPrice=price.unitPrice;next.amount=price.amount;
   next.receivedQty=r.stockSource==='immediate'?qty:0;
   next.recoveredQty=itemRecoverable(r.item)?Number($('completeRecovered').value||0):0;
   if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>qty)return notify('Recovered quantity must be a whole number from 0 to usage quantity.');
@@ -785,11 +805,13 @@ $('usageForm').addEventListener('submit',async e=>{
   const returned=!incomplete&&itemRecoverable(item)?Number($('usageRecoveredQty').value||0):0;
   if(!Number.isFinite(returned)||!Number.isInteger(returned)||returned<0||(!incomplete&&returned>qty))return notify('Recovered quantity must be between zero and usage quantity.');
   // Inform users when no sufficient stock has been entered.
+  const price=cost($('usageUnitPrice').value.trim(),qty);
+  if(price===null)return notify('Invalid unit price.');
   const immediate=measured&&$('usageSource').value==='immediate';
   const receivedQty=immediate&&!incomplete?qty:0;
   const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
   if(measured&&!incomplete&&qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:incomplete?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,unitPrice:price.unitPrice,amount:price.amount,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:incomplete?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('usageDate').value=today();syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
