@@ -92,7 +92,8 @@
             </label>
             <p id="usageImmediateFields" class="muted hidden">Stock In automatically equals Usage Out. No opening balance or separate stock receipt is required.</p>
           </div>
-          <div class="grid two">
+          <div class="grid three">
+            <label>Operator<input id="usageOperator" maxlength="100" placeholder="Operator name"></label>
             <label>Mechanic<input id="usageMechanic" maxlength="80" placeholder="Mechanic name"></label>
             <label>Supervisor<input id="usageSupervisor" maxlength="80" placeholder="Supervisor name"></label>
           </div>
@@ -120,7 +121,7 @@
             <label>Quantity<input id="workQty" type="number" min="0.01" step="0.01"></label>
             <label>Job / reference<input id="workJob" maxlength="100" placeholder="Optional job or site"></label>
           </div>
-          <div class="grid two"><label>Operator<input id="workPerformedBy" maxlength="100" placeholder="Person or team who performed the work"></label><label>Supervisor<input id="workSupervisor" maxlength="100" placeholder="Supervising person"></label></div>
+          <div class="grid three"><label>Operator<input id="workPerformedBy" maxlength="100" placeholder="Operator or team"></label><label>Mechanic<input id="workMechanic" maxlength="80" placeholder="Mechanic name"></label><label>Supervisor<input id="workSupervisor" maxlength="100" placeholder="Supervising person"></label></div>
           <label>Description<textarea id="workRemarks" rows="3" maxlength="400" placeholder="Describe the work performed"></textarea></label>
           <p class="muted">Leave quantity blank to save Pending Details. Complete it later before Manager review.</p><button class="primary" type="submit">Save Work Entry</button>
         </form>
@@ -270,6 +271,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261015-all-usage-prices-v1"></script>
+  <script type="module" src="./app.js?v=20261015-personnel-normalized-v1"></script>
 </body>
 </html>
