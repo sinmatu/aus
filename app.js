@@ -361,17 +361,19 @@ function recordsTable(records){
     const status=r.status||'pending';
     const reviewable=status!=='checked'&&status!=='void'&&status!=='pending_details';
     const selectCell=manager?'<td class="select-col">'+(reviewable?'<input class="record-select" type="checkbox" value="'+esc(r.id)+'">':'')+'</td>':'';
-    let reviewCell='';
-    if(manager){
-      const checked=status==='checked'||status==='pending_details'?'':'<button class="record-action" data-status="checked">Mark Checked</button>';
-      const correct='<button class="record-action" data-correct="1">Correct Entry</button>';
-      const correction=status==='correction'||status==='pending_details'?'':'<button class="record-action" data-status="correction">Correction Required</button>';
-      const voidBtn='<button class="record-action danger-link" data-status="void">Void Entry</button>';
-      reviewCell='<td><div class="record-actions">'+checked+correct+correction+voidBtn+'</div></td>';
-    }
     const canComplete=status==='pending_details'&&(currentRole==='manager'||r.createdBy===currentUser?.uid);
     const completion=canComplete?'<button type="button" class="record-action" data-complete="1">Complete Entry</button>':'';
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell.replace('<div class="record-actions">','<div class="record-actions">'+completion):completion?'<td>'+completion+'</td>':'<td></td>')+'</tr>';
+    let reviewCell='';
+    if(manager){
+      const checkedDisabled=status==='checked'||status==='pending_details'||status==='void';
+      const checked='<button type="button" class="record-action" data-status="checked" '+(checkedDisabled?'disabled title="'+(status==='pending_details'?'Complete the missing quantity before checking.':'Already checked or voided.')+'"':'')+'>Mark Checked</button>';
+      const correct='<button type="button" class="record-action" data-correct="1">Correct Entry</button>';
+      const correctionDisabled=status==='correction'||status==='pending_details'||status==='void';
+      const correction='<button type="button" class="record-action" data-status="correction" '+(correctionDisabled?'disabled title="'+(status==='pending_details'?'Complete missing details or use Correct Entry.':'Correction already required or record voided.')+'"':'')+'>Correction Required</button>';
+      const voidBtn='<button type="button" class="record-action danger-link" data-status="void" '+(status==='void'?'disabled':'')+'>Void Entry</button>';
+      reviewCell='<td><div class="record-actions">'+completion+checked+correct+correction+voidBtn+'</div></td>';
+    }
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell:completion?'<td><div class="record-actions">'+completion+'</div></td>':'<td></td>')+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
