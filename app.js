@@ -364,7 +364,7 @@ function recordsTable(records){
     let reviewCell='';
     if(manager){
       const checked=status==='checked'||status==='pending_details'?'':'<button class="record-action" data-status="checked">Mark Checked</button>';
-      const correct=status==='pending_details'?'':'<button class="record-action" data-correct="1">Correct Entry</button>';
+      const correct='<button class="record-action" data-correct="1">Correct Entry</button>';
       const correction=status==='correction'||status==='pending_details'?'':'<button class="record-action" data-status="correction">Correction Required</button>';
       const voidBtn='<button class="record-action danger-link" data-status="void">Void Entry</button>';
       reviewCell='<td><div class="record-actions">'+checked+correct+correction+voidBtn+'</div></td>';
@@ -444,7 +444,7 @@ function openCorrection(id){
    $('correctItem').addEventListener('change',()=>renderUsageCorrectionFields(r));
    renderUsageCorrectionFields(r);
  }else{
-   $('correctionFields').innerHTML='<div class="grid two"><label>Quantity<input id="correctQty" type="number" min="0.01" step="0.01" value="'+esc(r.qty)+'" required></label><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label></div>';
+   $('correctionFields').innerHTML='<div class="grid two"><label>Date<input id="correctDate" type="date" value="'+esc(r.date)+'" required></label><label>Asset<select id="correctAsset">'+state.assets.map(a=>'<option value="'+esc(a.id)+'" '+(a.id===r.assetId?'selected':'')+'>'+esc(assetLabel(a))+'</option>').join('')+'</select></label></div>'+ '<div class="grid three"><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label><label>Quantity (optional)<input id="correctQty" type="number" min="0.01" step="0.01" value="'+esc(r.qty??'')+'"></label><label>Job / reference<input id="correctJob" maxlength="100" value="'+esc(r.job||'')+'"></label></div>'+ '<div class="grid two"><label>Operator<input id="correctOperator" maxlength="100" value="'+esc(r.operator||r.performedBy||'')+'"></label><label>Supervisor<input id="correctSupervisor" maxlength="100" value="'+esc(r.supervisor||'')+'"></label></div>'+ '<label>Description<textarea id="correctRemarks" rows="3" maxlength="400">'+esc(r.remarks||'')+'</textarea></label>';
  }
  $('correctionDialog').showModal();
 }
@@ -464,24 +464,32 @@ async function saveCorrection(e){
    if(!next.date||!next.assetId)return notify('Date and asset are required.');
    if(!measured&&!next.remarks)return notify('Description is required for non-quantity items.');
    if(measured){
-     next.qty=Number($('correctQty').value);
-     if(!Number.isFinite(next.qty)||next.qty<=0)return notify('Quantity must be positive.');
+     const qtyText=$('correctQty').value.trim();
+     next.qty=qtyText===''?null:Number(qtyText);
+     if(next.qty!==null&&(!Number.isFinite(next.qty)||next.qty<=0))return notify('Quantity must be positive or blank.');
      next.unit=itemUnit(item);
      if(!next.unit)return notify('Selected item has no configured unit.');
      const price=cost($('correctUnitPrice').value.trim(),next.qty);
      if(price===null)return notify('Invalid unit price.');
      next.unitPrice=price.unitPrice;next.amount=price.amount;
-     next.recoveredQty=itemRecoverable(item)?Number($('correctRecovered').value||0):0;
-     if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||next.recoveredQty>next.qty)return notify('Invalid recovered quantity.');
-     next.receivedQty=next.stockSource==='immediate'?next.qty:0;
+     next.recoveredQty=next.qty!==null&&itemRecoverable(item)?Number($('correctRecovered').value||0):0;
+     if(!Number.isInteger(next.recoveredQty)||next.recoveredQty<0||(next.qty!==null&&next.recoveredQty>next.qty))return notify('Invalid recovered quantity.');
+     next.receivedQty=next.qty!==null&&next.stockSource==='immediate'?next.qty:0;
+     next.status=next.qty===null?'pending_details':'checked';
    }else{
      next.qty=null;next.unit='';next.unitPrice=null;next.amount=null;
      next.recoveredQty=0;next.receivedQty=0;next.stockSource='none';
    }
  }else{
-   next.qty=Number($('correctQty').value);
-   if(!Number.isFinite(next.qty)||next.qty<=0)return notify('Quantity must be positive.');
+   const qtyText=$('correctQty').value.trim();
+   next.qty=qtyText===''?null:Number(qtyText);
+   if(next.qty!==null&&(!Number.isFinite(next.qty)||next.qty<=0))return notify('Quantity must be positive or blank.');
+   next.date=$('correctDate').value;next.assetId=$('correctAsset').value;
+   if(!next.date||!next.assetId)return notify('Date and asset are required.');
    next.measure=$('correctMeasure').value;
+   next.job=$('correctJob').value.trim();next.operator=$('correctOperator').value.trim();
+   next.supervisor=$('correctSupervisor').value.trim();next.remarks=$('correctRemarks').value.trim();
+   next.status=next.qty===null?'pending_details':'checked';
  }
  await persistRecord(next);$('correctionDialog').close();await refreshServerState();
 }
