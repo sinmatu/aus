@@ -18,6 +18,73 @@ const defaults={
   balances:[]
 };
 let state=structuredClone(defaults);
+const PAGE_SIZE=25;
+let recordsPage=0;
+const monthSubscriptions=new Map();
+const monthDatasets=new Map();
+let stockSubscriptions=[];
+let refreshToken=0;
+function selectedMonths(){return [...new Set([$('recordMonth')?.value,$('reportMonth')?.value].filter(Boolean))]}
+function stopDataSync(){
+  refreshToken++;
+  for(const stop of monthSubscriptions.values())stop();
+  monthSubscriptions.clear();monthDatasets.clear();
+  stockSubscriptions.forEach(stop=>stop());stockSubscriptions=[];
+}
+function applyMonthlyRecords(){
+  const active=new Map();
+  for(const [month,rows] of monthDatasets)active.set(month,rows);
+  // The authoritative stock history is kept separately, so month-scoped Records
+  // and Reports never change stock opening balances or stock availability.
+  state.records=[...active.values()].flat();
+}
+function watchMonth(month){
+  if(!month||!fb.db||monthSubscriptions.has(month))return;
+  const key=month,token=refreshToken;
+  const begin=month+'-01',endMonth=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),1);
+  const finish=endMonth.getFullYear()+'-'+String(endMonth.getMonth()+1).padStart(2,'0')+'-01';
+  const snapshots={usage:null,work:null};
+  const update=()=>{
+    if(token!==refreshToken||!snapshots.usage||!snapshots.work)return;
+    monthDatasets.set(key,[...snapshots.usage,...snapshots.work]);
+    applyMonthlyRecords();
+    renderRecords();renderReports();
+  };
+  const stops=['usage','work'].map(kind=>{
+    const collection=kind==='usage'?'usageRecords':'workRecords';
+    return fb.onSnapshot(fb.query(fb.collection(fb.db,collection),fb.where('date','>=',begin),fb.where('date','<',finish)),snap=>{
+      snapshots[kind]=snap.docs.map(d=>({id:d.id,kind,...d.data()}));update();
+    },error=>notify('Monthly '+kind+' sync failed: '+error.message));
+  });
+  monthSubscriptions.set(key,()=>stops.forEach(stop=>stop()));
+}
+function syncSelectedMonths(){
+  const selected=selectedMonths();
+  for(const [month,stop] of monthSubscriptions)if(!selected.includes(month)){stop();monthSubscriptions.delete(month);monthDatasets.delete(month)}
+  for(const month of selected)watchMonth(month);
+  applyMonthlyRecords();renderRecords();renderReports();
+}
+function beginDataSync(){
+  stopDataSync();
+  const token=refreshToken;
+  const snapStock={usage:null,movements:null};
+  const updateStock=()=>{
+    if(token!==refreshToken||!snapStock.usage||!snapStock.movements)return;
+    stockHistoryRecords=snapStock.usage;
+    state.movements=snapStock.movements;
+    renderStockReports();renderMovementHistory();
+  };
+  stockSubscriptions=[
+    fb.onSnapshot(fb.collection(fb.db,'usageRecords'),snap=>{
+      snapStock.usage=snap.docs.map(d=>({id:d.id,kind:'usage',...d.data()}));updateStock();
+    },err=>notify('Stock usage sync failed: '+err.message)),
+    fb.onSnapshot(fb.collection(fb.db,'stockMovements'),snap=>{
+      snapStock.movements=snap.docs.map(d=>({id:d.id,...d.data()}));updateStock();
+    },err=>notify('Stock movement sync failed: '+err.message))
+  ];
+  syncSelectedMonths();
+}
+let stockHistoryRecords=[];
 function save(){
   renderAll();
 }
@@ -34,7 +101,11 @@ async function persistAssetType(t){await fb.setDoc(fb.doc(fb.db,'assetTypes',t.i
 async function persistAsset(a){await fb.setDoc(fb.doc(fb.db,'assets',a.id),{name:a.name,typeId:a.typeId,meta:a.meta||{}})}
 async function persistRecord(r){const data={...r};delete data.id;delete data.kind;await fb.setDoc(fb.doc(fb.db,recordCollection(r),r.id),data)}
 async function persistMovement(m){const data={...m};delete data.id;await fb.setDoc(fb.doc(fb.db,'stockMovements',m.id),data)}
-async function refreshServerState(){await loadFirebaseState();save()}
+async function refreshServerState(){
+ await loadFirebaseState();
+ stockHistoryRecords=state.records.filter(r=>r.kind==='usage');
+ if(monthSubscriptions.size){syncSelectedMonths()}else save();
+}
 async function loadFirebaseState(){
   const [typeSnap,assetSnap,usageSnap,workSnap,settingsSnap,movementSnap]=await Promise.all([
     fb.getDocsFromServer(fb.collection(fb.db,'assetTypes')),
@@ -148,7 +219,7 @@ async function initFirebase(){
   await U.setPersistence(fb.auth,U.inMemoryPersistence);
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
-    if(!user){currentUser=null;currentRole='';showLogin();return}
+    if(!user){stopDataSync();currentUser=null;currentRole='';showLogin();return}
     try{
       const snap=await F.getDocFromServer(F.doc(fb.db,'users',user.uid));
       if(!snap.exists())throw Error('Account is not authorised for this system.');
@@ -162,7 +233,9 @@ async function initFirebase(){
       showShell();
       try {
         await loadFirebaseState();
+        stockHistoryRecords=state.records.filter(r=>r.kind==='usage');
         save();
+        beginDataSync();
         $('setupBanner').classList.add('hidden');
       } catch (loadErr) {
         $('setupBanner').textContent='Signed in, but Firestore could not load: '+(loadErr.message||loadErr)+'. Check Firestore Rules and connection.';
@@ -299,8 +372,11 @@ function filteredRecords(month,assetId,kind){
 }
 function renderRecords(){
   const rows=filteredRecords($('recordMonth').value,$('recordAsset').value,$('recordKind').value);
-  $('recordCount').textContent=rows.length+' shown';
-  $('recordsTable').innerHTML=recordsTable(rows);
+  const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
+  recordsPage=Math.min(recordsPage,pages-1);
+  $('recordCount').textContent=rows.length+' records';
+  $('recordsTable').innerHTML=recordsTable(rows.slice(recordsPage*PAGE_SIZE,(recordsPage+1)*PAGE_SIZE));
+  $('recordsPaging').innerHTML=rows.length?'<span>Page '+(recordsPage+1)+' of '+pages+'</span> <button type="button" class="secondary" data-page="prev" '+(recordsPage===0?'disabled':'')+'>Previous</button> <button type="button" class="secondary" data-page="next" '+(recordsPage===pages-1?'disabled':'')+'>Next</button>':'';
   updateBulkReview();
 }
 function updateBulkReview(){
@@ -488,12 +564,13 @@ $('recoveryForm').addEventListener('submit',async e=>{
  await createMovement({type:'recovered-out',item,unit:itemUnit(item),qty,date:$('recoveryDate').value,reason:$('recoveryReason').value,remarks:$('recoveryRemarks').value.trim()});e.target.reset();$('recoveryDate').value=today();notify('Recovered stock out saved.');
 });
 function stockSummaryData(){
+ const stockRecords=stockHistoryRecords;
  return state.items.filter(i=>i.trackQuantity!==false).map(i=>{
   const item=itemName(i),unit=i.unit;
   const ins=state.movements.filter(m=>m.type==='in'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
-  const directIns=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.receivedQty||0),0);
-  const outs=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.qty||0),0);
-  const recoveredIn=state.records.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
+  const directIns=stockRecords.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.receivedQty||0),0);
+  const outs=stockRecords.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.qty||0),0);
+  const recoveredIn=stockRecords.filter(r=>r.kind==='usage'&&r.item===item&&r.status!=='void'&&r.status!=='pending_details').reduce((n,r)=>n+Number(r.recoveredQty||0),0);
   const recoveredOut=state.movements.filter(m=>m.type==='recovered-out'&&m.item===item).reduce((n,m)=>n+Number(m.qty||0),0);
   return {item,unit,ins:ins+directIns,outs,balance:ins+directIns-outs,recoveredIn,recoveredOut,recoveredBalance:recoveredIn-recoveredOut,recoverable:!!i.recoverable};
  });
@@ -504,12 +581,12 @@ function renderStockReports(){
  // Balances are all-time; movement quantities respect the selected month.
  const tbody=filtered.map(x=>{
  const movementIns=state.movements.filter(m=>m.type==='in'&&m.item===x.item&&(!month||m.date.startsWith(month))).reduce((n,m)=>n+Number(m.qty),0);
- const ins=movementIns+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.receivedQty||0),0);
- const outs=state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
+ const ins=movementIns+stockHistoryRecords.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.receivedQty||0),0);
+ const outs=stockHistoryRecords.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))&&(!$('reportAsset').value||r.assetId===$('reportAsset').value)).reduce((n,r)=>n+Number(r.qty),0);
  const periodStart=month?month+'-01':'';
- const opening=periodStart?(state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)+state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.receivedQty||0),0))-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
+ const opening=periodStart?(state.movements.filter(m=>m.type==='in'&&m.item===x.item&&m.date<periodStart).reduce((n,m)=>n+Number(m.qty),0)+stockHistoryRecords.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.receivedQty||0),0))-stockHistoryRecords.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&r.date<periodStart).reduce((n,r)=>n+Number(r.qty),0):0;
  // With an asset filter, show quantities for that asset, but don't label the warehouse balance as an asset balance.
- const stockBalance=$('reportAsset').value?'—':opening+ins-state.records.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
+ const stockBalance=$('reportAsset').value?'—':opening+ins-stockHistoryRecords.filter(r=>r.kind==='usage'&&r.item===x.item&&r.status!=='void'&&r.status!=='pending_details'&&(!month||r.date.startsWith(month))).reduce((n,r)=>n+Number(r.qty),0);
  return '<tr><td>'+esc(x.item)+'</td><td>'+esc(x.unit)+'</td><td>'+($('reportAsset').value?'—':opening)+'</td><td>'+ins+'</td><td>'+outs+'</td><td>'+stockBalance+'</td></tr>';
  }).join('');
  $('stockSummary').innerHTML='<table><thead><tr><th>Item</th><th>Unit</th><th>Opening</th><th>In</th><th>Usage Out</th><th>Closing</th></tr></thead><tbody>'+tbody+'</tbody></table>';
@@ -522,9 +599,17 @@ function renderMovementHistory(){
 function renderAll(){renderSelectors();renderDefinitions();renderAssets();renderMetaFields();renderAssetProfiles();renderRecords();renderReports();renderMovementHistory();$('itemUnit').innerHTML=optionList(state.units,'Select unit')}
 
 $('assetTypeSelect').addEventListener('change',renderMetaFields);
-$('recordApply').addEventListener('click',renderRecords);
-$('recordSort').addEventListener('change',renderRecords);
-$('reportMonth').addEventListener('change',renderReports);
+$('recordApply').addEventListener('click',()=>{recordsPage=0;renderRecords()});
+$('recordMonth').addEventListener('change',()=>{recordsPage=0;syncSelectedMonths()});
+$('recordAsset').addEventListener('change',()=>{recordsPage=0;renderRecords()});
+$('recordKind').addEventListener('change',()=>{recordsPage=0;renderRecords()});
+$('recordsPaging').addEventListener('click',e=>{
+ const direction=e.target.closest('[data-page]')?.dataset.page;
+ if(direction==='prev'&&recordsPage>0){recordsPage--;renderRecords()}
+ if(direction==='next'){recordsPage++;renderRecords()}
+});
+$('recordSort').addEventListener('change',()=>{recordsPage=0;renderRecords()});
+$('reportMonth').addEventListener('change',syncSelectedMonths);
 $('reportAsset').addEventListener('change',renderReports);
 $('reportItem').addEventListener('change',renderReports);
 
