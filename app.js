@@ -348,7 +348,7 @@ function recordDetail(r){
   return r.kind==='usage'?(r.trackQuantity===false?r.item:r.item+' · '+r.qty+' '+r.unit):r.qty+' '+r.measure;
 }
 function recordReference(r){
-  return r.kind==='usage'?[r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · '):[(r.operator||r.performedBy)&&'Operator: '+(r.operator||r.performedBy),r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · ');
+  return [(r.operator||r.performedBy)&&'Operator: '+(r.operator||r.performedBy),r.mechanic&&'Mechanic: '+r.mechanic,r.supervisor&&'Supervisor: '+r.supervisor].filter(Boolean).join(' · ');
 }
 function recordRemarks(r){return [r.remarks,r.kind==='work'&&r.job?'Job / Ref: '+r.job:''].filter(Boolean).join(' · ');}
 function recordsTable(records){
@@ -440,13 +440,13 @@ function openCorrection(id){
      '<label id="correctUnitWrap">Unit<input id="correctUnit" type="text" readonly value="'+esc(r.unit||'')+'"></label>'+
      '<label id="correctPriceWrap">Unit price (RM)<input id="correctUnitPrice" type="number" min="0" step="0.0001" value="'+esc(r.unitPrice??'')+'"></label></div>'+
      '<label id="correctRecoveryWrap">Old items recovered<input id="correctRecovered" type="number" min="0" step="1" value="'+esc(r.recoveredQty??0)+'"></label>'+
-     '<div class="grid two"><label>Mechanic<input id="correctMechanic" maxlength="80" value="'+esc(r.mechanic||'')+'"></label>'+
+     '<div class="grid three"><label>Operator<input id="correctOperator" maxlength="100" value="'+esc(r.operator||r.performedBy||'')+'"></label><label>Mechanic<input id="correctMechanic" maxlength="80" value="'+esc(r.mechanic||'')+'"></label>'+
      '<label>Supervisor<input id="correctSupervisor" maxlength="80" value="'+esc(r.supervisor||'')+'"></label></div>'+
      '<label>Description<input id="correctRemarks" maxlength="400" value="'+esc(r.remarks||'')+'"></label>';
    $('correctItem').addEventListener('change',()=>renderUsageCorrectionFields(r));
    renderUsageCorrectionFields(r);
  }else{
-   $('correctionFields').innerHTML='<div class="grid two"><label>Date<input id="correctDate" type="date" value="'+esc(r.date)+'" required></label><label>Asset<select id="correctAsset">'+state.assets.map(a=>'<option value="'+esc(a.id)+'" '+(a.id===r.assetId?'selected':'')+'>'+esc(assetLabel(a))+'</option>').join('')+'</select></label></div>'+ '<div class="grid three"><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label><label>Quantity (optional)<input id="correctQty" type="number" min="0.01" step="0.01" value="'+esc(r.qty??'')+'"></label><label>Job / reference<input id="correctJob" maxlength="100" value="'+esc(r.job||'')+'"></label></div>'+ '<div class="grid two"><label>Operator<input id="correctOperator" maxlength="100" value="'+esc(r.operator||r.performedBy||'')+'"></label><label>Supervisor<input id="correctSupervisor" maxlength="100" value="'+esc(r.supervisor||'')+'"></label></div>'+ '<label>Description<textarea id="correctRemarks" rows="3" maxlength="400">'+esc(r.remarks||'')+'</textarea></label>';
+   $('correctionFields').innerHTML='<div class="grid two"><label>Date<input id="correctDate" type="date" value="'+esc(r.date)+'" required></label><label>Asset<select id="correctAsset">'+state.assets.map(a=>'<option value="'+esc(a.id)+'" '+(a.id===r.assetId?'selected':'')+'>'+esc(assetLabel(a))+'</option>').join('')+'</select></label></div>'+ '<div class="grid three"><label>Work measure<select id="correctMeasure">'+state.measures.map(m=>'<option '+(m===r.measure?'selected':'')+'>'+esc(m)+'</option>').join('')+'</select></label><label>Quantity (optional)<input id="correctQty" type="number" min="0.01" step="0.01" value="'+esc(r.qty??'')+'"></label><label>Job / reference<input id="correctJob" maxlength="100" value="'+esc(r.job||'')+'"></label></div>'+ '<div class="grid three"><label>Operator<input id="correctOperator" maxlength="100" value="'+esc(r.operator||r.performedBy||'')+'"></label><label>Mechanic<input id="correctMechanic" maxlength="80" value="'+esc(r.mechanic||'')+'"></label><label>Supervisor<input id="correctSupervisor" maxlength="100" value="'+esc(r.supervisor||'')+'"></label></div>'+ '<label>Description<textarea id="correctRemarks" rows="3" maxlength="400">'+esc(r.remarks||'')+'</textarea></label>';
  }
  $('correctionDialog').showModal();
 }
@@ -460,6 +460,7 @@ async function saveCorrection(e){
    next.assetId=$('correctAsset').value;
    next.item=item;
    next.trackQuantity=measured;
+   next.operator=$('correctOperator').value.trim();
    next.mechanic=$('correctMechanic').value.trim();
    next.supervisor=$('correctSupervisor').value.trim();
    next.remarks=$('correctRemarks').value.trim();
@@ -490,6 +491,7 @@ async function saveCorrection(e){
    if(!next.date||!next.assetId)return notify('Date and asset are required.');
    next.measure=$('correctMeasure').value;
    next.job=$('correctJob').value.trim();next.operator=$('correctOperator').value.trim();
+   next.mechanic=$('correctMechanic').value.trim();
    next.supervisor=$('correctSupervisor').value.trim();next.remarks=$('correctRemarks').value.trim();
    next.status=next.qty===null?'pending_details':'checked';
  }
@@ -867,7 +869,7 @@ $('usageForm').addEventListener('submit',async e=>{
   const receivedQty=immediate&&!incomplete?qty:0;
   const available=(stockSummaryData().find(x=>x.item===item)?.balance||0)+receivedQty;
   if(measured&&!incomplete&&qty>available&&!await uiConfirm('Usage exceeds recorded stock ('+available+' '+unit+'). Save anyway?'))return;
-  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,unitPrice:price.unitPrice,amount:price.amount,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:incomplete?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'usage',date:$('usageDate').value,assetId:$('usageAsset').value,item,qty:measured?qty:null,unit:measured?unit:'',trackQuantity:measured,receivedQty,unitPrice:price.unitPrice,amount:price.amount,stockSource:measured?(immediate?'immediate':'warehouse'):'none',recoveredQty:returned,operator:$('usageOperator').value.trim(),mechanic:$('usageMechanic').value.trim(),supervisor:$('usageSupervisor').value.trim(),remarks:$('usageRemarks').value.trim(),status:incomplete?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('usageDate').value=today();syncUsageItem();syncUsageSource();save(); notify(immediate?'Immediate stock receipt and usage saved.':'Usage record saved.');
@@ -876,7 +878,7 @@ $('workForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const workQty=$('workQty').value===''?null:Number($('workQty').value);
   if(workQty!==null&&(!Number.isFinite(workQty)||workQty<=0))return notify('Enter a positive quantity or leave it blank.');
-  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:workQty,job:$('workJob').value.trim(),operator:$('workPerformedBy').value.trim(),supervisor:$('workSupervisor').value.trim(),remarks:$('workRemarks').value.trim(),status:workQty===null?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
+  const r={id:uid('rec'),kind:'work',date:$('workDate').value,assetId:$('workAsset').value,measure:$('workMeasure').value,qty:workQty,job:$('workJob').value.trim(),operator:$('workPerformedBy').value.trim(),mechanic:$('workMechanic').value.trim(),supervisor:$('workSupervisor').value.trim(),remarks:$('workRemarks').value.trim(),status:workQty===null?'pending_details':'pending',createdBy:currentUser?.uid||'',createdAt:new Date().toISOString()};
   await persistRecord(r);
   await refreshServerState();
   e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
