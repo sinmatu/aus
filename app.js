@@ -527,26 +527,45 @@ function reportAssetGroups(records){
   }).filter(g=>g.usage.length||g.work.length);
 }
 function reportRowsTable(records,kind){
-  if(!records.length)return '';
-  const label=kind==='usage'?'Usage':'Work';
-  return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Activity / Quantity</th><th>Amount</th><th>Description</th><th>Personnel</th></tr></thead><tbody>'+records.map(r=>
-    '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
-  ).join('')+'</tbody></table></div>';
+ if(!records.length)return '';
+ const usage=kind==='usage',label=usage?'Usage':'Work';
+ return '<div class="report-kind-section"><h4>'+label+'</h4><table><thead><tr><th>Date</th><th>Type</th><th>Activity / Quantity</th>'+(usage?'<th>Amount</th>':'')+'<th>Description</th><th>Personnel</th></tr></thead><tbody>'+records.map(r=>
+  '<tr><td>'+esc(r.date)+'</td><td><span class="record-kind '+r.kind+'">'+esc(label)+'</span></td><td>'+esc(recordDetail(r))+'</td>'+(usage?'<td>'+esc(entryAmount(r))+'</td>':'')+'<td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td></tr>'
+ ).join('')+'</tbody></table></div>';
 }
 function amountTotals(records){
  const priced=records.filter(r=>r.kind==='usage'&&r.amount!=null&&r.amount!==''&&Number.isFinite(Number(r.amount)));
  return {cents:priced.reduce((n,r)=>n+Math.round(Number(r.amount)*100),0),unpriced:records.filter(r=>r.kind==='usage').length-priced.length};
 }
+function usageItemGroups(records){
+ const groups=new Map();
+ for(const r of records){
+  const item=r.item||'Unspecified',unit=r.trackQuantity===false?'':(r.unit||'');
+  const key=JSON.stringify([item,unit]);
+  if(!groups.has(key))groups.set(key,{item,unit,qty:0,hasQty:false,amountCents:0,unpriced:0});
+  const g=groups.get(key);
+  if(r.qty!=null&&Number.isFinite(Number(r.qty))&&r.trackQuantity!==false){g.qty+=Number(r.qty);g.hasQty=true}
+  if(r.amount!=null&&r.amount!==''&&Number.isFinite(Number(r.amount)))g.amountCents+=Math.round(Number(r.amount)*100);
+  else g.unpriced++;
+ }
+ return [...groups.values()].sort((a,b)=>a.item.localeCompare(b.item));
+}
+function usageSummaryTable(records){
+ if(!records.length)return '';
+ const groups=usageItemGroups(records),totals=amountTotals(records);
+ return '<div class="report-kind-section"><h4>Usage Summary by Item</h4><table><thead><tr><th>Item</th><th>Total Quantity</th><th>Amount (RM)</th></tr></thead><tbody>'+
+ groups.map(g=>'<tr><td>'+esc(g.item)+'</td><td>'+esc(g.hasQty?Number(g.qty.toFixed(4))+' '+g.unit:'—')+'</td><td>'+esc(money(g.amountCents/100))+(g.unpriced?' <small class="muted">('+g.unpriced+' unpriced)</small>':'')+'</td></tr>').join('')+
+ '<tr><th>Asset Usage Total</th><th>—</th><th>'+esc(money(totals.cents/100))+'</th></tr></tbody></table></div>';
+}
 function reportTable(records){
-  if(!records.length)return '<div class="empty">No matching report records.</div>';
-  const groups=reportAssetGroups(records);
-  return groups.map(g=>
-    '<section class="report-asset-group"><h3>'+esc(g.name)+'</h3>'+
-    reportRowsTable(g.usage,'usage')+
-    reportRowsTable(g.work,'work')+
-    '<div class="report-cost-subtotal"><strong>Asset subtotal: '+esc(money(amountTotals(g.usage).cents/100))+'</strong>'+(amountTotals(g.usage).unpriced?' · '+amountTotals(g.usage).unpriced+' unpriced entries':'')+'</div>'+
-    '</section>'
-  ).join('');
+ if(!records.length)return '<div class="empty">No matching report records.</div>';
+ return reportAssetGroups(records).map(g=>
+  '<section class="report-asset-group"><h3>'+esc(g.name)+'</h3>'+
+  reportRowsTable(g.usage,'usage')+
+  usageSummaryTable(g.usage)+
+  reportRowsTable(g.work,'work')+
+  '</section>'
+ ).join('');
 }
 function renderReports(){
   if(!$('reportTable'))return;
@@ -577,12 +596,16 @@ function reportMatrix(){
       aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
       g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
     }
+    if(g.usage.length){
+      aoa.push(['Usage Summary by Item'],['Item','Total Quantity','Unit','Amount (RM)','Unpriced Entries']);
+      usageItemGroups(g.usage).forEach(t=>aoa.push([t.item,t.hasQty?Number(t.qty.toFixed(4)):null,t.unit,t.amountCents/100,t.unpriced]));
+      const subtotal=amountTotals(g.usage);aoa.push(['Asset Usage Total',null,null,subtotal.cents/100,subtotal.unpriced]);
+    }
     if(g.work.length){
       aoa.push(['Work']);
-      aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
-      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
+      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
+      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
     }
-    const subtotal=amountTotals(g.usage);aoa.push(['Asset subtotal',subtotal.cents/100,subtotal.unpriced+' unpriced usage entries']);
     if(gi<groups.length-1)aoa.push([]);
   });
   return aoa;
