@@ -24,7 +24,18 @@ const monthSubscriptions=new Map();
 const monthDatasets=new Map();
 let stockSubscriptions=[];
 let refreshToken=0;
-function selectedMonths(){return [...new Set([$('recordMonth')?.value,$('reportMonth')?.value].filter(Boolean))]}
+function selectedMonths(){
+ return [...new Set(['record','report'].map(prefix=>periodKey(prefix)).filter(Boolean))];
+}
+function periodKey(prefix){
+ const year=$(prefix+'Year')?.value||String(new Date().getFullYear());
+ return $(prefix+'Period')?.value==='month'?($(prefix+'Month')?.value||year+'-01'):year;
+}
+function matchesPeriod(date,key){return !key||String(date||'').startsWith(key)}
+function showPeriodFields(prefix){
+ $(prefix+'Month').classList.toggle('hidden',$(prefix+'Period').value!=='month');
+}
+function periodLabel(prefix){const key=periodKey(prefix);return key.length===7?'Month: '+key:'Year: '+key}
 function stopDataSync(){
   refreshToken++;
   for(const stop of monthSubscriptions.values())stop();
@@ -41,7 +52,7 @@ function applyMonthlyRecords(){
 function watchMonth(month){
   if(!month||!fb.db||monthSubscriptions.has(month))return;
   const key=month,token=refreshToken;
-  const begin=month+'-01',endMonth=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),1);
+  const begin=month.length===4?month+'-01-01':month+'-01',endMonth=month.length===4?new Date(Number(month)+1,0,1):new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),1);
   const finish=endMonth.getFullYear()+'-'+String(endMonth.getMonth()+1).padStart(2,'0')+'-01';
   const snapshots={usage:null,work:null};
   const update=()=>{
@@ -186,8 +197,8 @@ const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(
 const today=()=>new Date().toISOString().slice(0,10);
 $('usageDate').value=today(); $('workDate').value=today();$('stockDate').value=today();$('recoveryDate').value=today();
 const currentMonth=today().slice(0,7);
-$('recordMonth').value=currentMonth;
-$('reportMonth').value=currentMonth;
+$('recordMonth').value=currentMonth;$('recordYear').value=currentMonth.slice(0,4);
+$('reportMonth').value=currentMonth;$('reportYear').value=currentMonth.slice(0,4);
 
 function applyRoleUI(){
   document.querySelectorAll('[data-role]').forEach(el=>{
@@ -378,10 +389,10 @@ function recordsTable(records){
 }
 function filteredRecords(month,assetId,kind){
   const dir=$('recordSort')?.value==='asc'?1:-1;
-  return state.records.filter(r=>(!month||r.date.startsWith(month))&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>dir*a.date.localeCompare(b.date));
+  return state.records.filter(r=>matchesPeriod(r.date,month)&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>dir*a.date.localeCompare(b.date));
 }
 function renderRecords(){
-  const rows=filteredRecords($('recordMonth').value,$('recordAsset').value,$('recordKind').value);
+  const rows=filteredRecords(periodKey('record'),$('recordAsset').value,$('recordKind').value);
   const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
   recordsPage=Math.min(recordsPage,pages-1);
   $('recordCount').textContent=rows.length+' records';
@@ -498,12 +509,11 @@ async function saveCorrection(e){
  await persistRecord(next);$('correctionDialog').close();await refreshServerState();
 }
 function reportRows(){
-  const item=$('reportItem').value;
-  return state.records
-    .filter(r=>(!$('reportMonth').value||r.date.startsWith($('reportMonth').value)))
-    .filter(r=>(!$('reportAsset').value||r.assetId===$('reportAsset').value))
-    .filter(r=>r.status!=='void'&&r.status!=='pending_details')
-    .filter(r=>!item||(r.kind==='usage'&&r.item===item));
+ const item=$('reportItem').value,kind=$('reportKind').value;
+ return state.records.filter(r=>matchesPeriod(r.date,periodKey('report')))
+   .filter(r=>!$('reportAsset').value||r.assetId===$('reportAsset').value)
+   .filter(r=>r.kind===kind&&r.status!=='void'&&r.status!=='pending_details')
+   .filter(r=>kind!=='usage'||!item||r.item===item);
 }
 function reportAssetGroups(records){
   const selected=$('reportAsset').value;
@@ -567,55 +577,66 @@ function reportTable(records){
   '</section>'
  ).join('');
 }
+function workMeasureGroups(records){
+ const groups=new Map();
+ records.forEach(r=>{
+  const key=r.measure||'Unspecified';
+  if(!groups.has(key))groups.set(key,{measure:key,qty:0,count:0});
+  const g=groups.get(key);g.count++;if(Number.isFinite(Number(r.qty)))g.qty+=Number(r.qty);
+ });
+ return [...groups.values()];
+}
+function workSummaryTable(records){
+ if(!records.length)return '';
+ return '<div class="report-kind-section"><h4>Work Summary by Measure</h4><table><thead><tr><th>Measure</th><th>Total Quantity</th><th>Entries</th></tr></thead><tbody>'+
+ workMeasureGroups(records).map(g=>'<tr><td>'+esc(g.measure)+'</td><td>'+esc(Number(g.qty.toFixed(4)))+'</td><td>'+g.count+'</td></tr>').join('')+'</tbody></table></div>';
+}
 function renderReports(){
-  if(!$('reportTable'))return;
-  const rows=reportRows();
-  const usage=rows.filter(r=>r.kind==='usage');
-  const work=rows.filter(r=>r.kind==='work');
-  const assetCount=new Set(rows.map(r=>r.assetId)).size;
-  const financial=amountTotals(rows);
-  $('reportSummary').innerHTML='<div class="summary-grid"><div class="summary-card"><span class="muted">Usage records</span><b>'+usage.length+'</b></div><div class="summary-card"><span class="muted">Work records</span><b>'+work.length+'</b></div><div class="summary-card"><span class="muted">Assets involved</span><b>'+assetCount+'</b></div><div class="summary-card"><span class="muted">Total records</span><b>'+rows.length+'</b></div><div class="summary-card"><span class="muted">Usage grand total</span><b>'+money(financial.cents/100)+'</b><small class="muted">'+(financial.unpriced?financial.unpriced+' unpriced usage entries':'All recorded amounts included')+'</small></div></div>';
-  $('reportTable').innerHTML=reportTable(rows);
-  renderStockReports();
+ if(!$('reportTable'))return;
+ const kind=$('reportKind').value,rows=reportRows(),groups=reportAssetGroups(rows);
+ $('reportItem').classList.toggle('hidden',kind!=='usage');
+ $('reportSummary').innerHTML='';
+ $('reportTable').innerHTML=rows.length?groups.map(g=>{
+  const records=kind==='usage'?g.usage:g.work;
+  return '<section class="report-asset-group"><h3>'+esc(g.name)+'</h3>'+
+   reportRowsTable(records,kind)+(kind==='usage'?usageSummaryTable(records):workSummaryTable(records))+'</section>';
+ }).join(''):'<div class="empty">No matching '+kind+' records.</div>';
+ const totals=$('reportTotals');
+ if(totals){
+  if(kind==='usage'){const amount=amountTotals(rows);totals.innerHTML='<strong>Usage Total: '+esc(money(amount.cents/100))+'</strong>'+(amount.unpriced?' · '+amount.unpriced+' unpriced entries':'');}
+  else totals.innerHTML='<strong>Work Totals:</strong> '+(workMeasureGroups(rows).map(g=>esc(Number(g.qty.toFixed(4))+' '+g.measure)).join(' · ')||'No recorded work');
+ }
 }
 function reportMatrix(){
-  const rows=reportRows();
-  const aoa=[['Asset Usage System Report'],['Month',$('reportMonth').value||'All'],['Asset',$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected'):'All Assets'],['Item',$('reportItem').value||'All Items'],[]];
-  aoa.push(['Stock / Usage Summary']);aoa.push(['Item','Unit','Stock In (all time)','Usage Out (all time)','Balance']);
-  stockSummaryData().filter(x=>!$('reportItem').value||x.item===$('reportItem').value).forEach(x=>aoa.push([x.item,x.unit,x.ins,x.outs,x.balance]));
-  aoa.push([],['Recovered Items'],['Item','Unit','Recovered In','Recovered Out','Balance']);
-  stockSummaryData().filter(x=>x.recoverable&&(!$('reportItem').value||x.item===$('reportItem').value)).forEach(x=>aoa.push([x.item,x.unit,x.recoveredIn,x.recoveredOut,x.recoveredBalance]));aoa.push([]);
-  const groups=reportAssetGroups(rows);
-  aoa.push(['Usage Cost Summary'],['Asset','Amount (RM)','Unpriced Usage Entries']);
-  groups.forEach(g=>{const t=amountTotals(g.usage);aoa.push([g.name,t.cents/100,t.unpriced])});
-  const grand=amountTotals(rows);aoa.push(['Grand total',grand.cents/100,grand.unpriced],[]);
-  groups.forEach((g,gi)=>{
-    aoa.push([g.name]);
-    if(g.usage.length){
-      aoa.push(['Usage']);
-      aoa.push(['Date','Type','Activity / Quantity','Amount','Description','Personnel']);
-      g.usage.forEach(r=>aoa.push([r.date,'Usage',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']));
-    }
-    if(g.usage.length){
-      aoa.push(['Usage Summary by Item'],['Item','Total Quantity','Unit','Amount (RM)','Unpriced Entries']);
-      usageItemGroups(g.usage).forEach(t=>aoa.push([t.item,t.hasQty?Number(t.qty.toFixed(4)):null,t.unit,t.amountCents/100,t.unpriced]));
-      const subtotal=amountTotals(g.usage);aoa.push(['Asset Usage Total',null,null,subtotal.cents/100,subtotal.unpriced]);
-    }
-    if(g.work.length){
-      aoa.push(['Work']);
-      aoa.push(['Date','Type','Activity / Quantity','Description','Personnel']);
-      g.work.forEach(r=>aoa.push([r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
-    }
-    if(gi<groups.length-1)aoa.push([]);
-  });
-  return aoa;
+ const kind=$('reportKind').value,rows=reportRows(),groups=reportAssetGroups(rows);
+ const aoa=[['Asset Usage System - '+(kind==='usage'?'Usage':'Work')+' Report'],['Period',periodKey('report')],['Asset',$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected'):'All Assets']];
+ if(kind==='usage')aoa.push(['Item',$('reportItem').value||'All Items']);
+ aoa.push([]);
+ for(const g of groups){
+  const records=kind==='usage'?g.usage:g.work;
+  aoa.push([g.name]);
+  aoa.push(kind==='usage'?['Date','Type','Activity / Quantity','Amount','Description','Personnel']:['Date','Type','Activity / Quantity','Description','Personnel']);
+  records.forEach(r=>aoa.push(kind==='usage'?[r.date,'Usage',recordDetail(r),entryAmount(r),recordRemarks(r),recordReference(r)||'']:[r.date,'Work',recordDetail(r),recordRemarks(r),recordReference(r)||'']));
+  if(kind==='usage'){
+   aoa.push(['Usage Summary by Item'],['Item','Quantity','Unit','Amount (RM)','Unpriced']);
+   usageItemGroups(records).forEach(t=>aoa.push([t.item,t.hasQty?Number(t.qty.toFixed(4)):null,t.unit,t.amountCents/100,t.unpriced]));
+   const total=amountTotals(records);aoa.push(['Asset Usage Total',null,null,total.cents/100,total.unpriced]);
+  }else{
+   aoa.push(['Work Summary by Measure'],['Measure','Total Quantity','Entries']);
+   workMeasureGroups(records).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4)),t.count]));
+  }
+  aoa.push([]);
+ }
+ if(kind==='usage'){const total=amountTotals(rows);aoa.push(['Grand total',null,null,total.cents/100,total.unpriced])}
+ else{aoa.push(['All Assets - Work Totals'],['Measure','Total Quantity','Entries']);workMeasureGroups(rows).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4)),t.count]))}
+ return aoa;
 }
 async function exportExcel(){
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const ws=XLSX.utils.aoa_to_sheet(reportMatrix());
   ws['!cols']=[{wch:22},{wch:16},{wch:30},{wch:18},{wch:65},{wch:30}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
-  XLSX.writeFile(wb,'aus-report-'+($('reportMonth').value||'all')+'.xlsx');
+  XLSX.writeFile(wb,'aus-report-'+(periodKey('report')+'-'+$('reportKind').value)+'.xlsx');
 }
 async function loadScript(src){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
 async function exportPdf(){
@@ -623,7 +644,7 @@ async function exportPdf(){
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
   const navy=[35,56,91],pale=[230,238,248],stripe=[246,249,253],ink=[35,48,67];
   const xs=[14,48,78,119,151,240],widths=[32,27,38,29,85,35];
-  const sectionTitles=['Stock / Usage Summary','Recovered Items','Usage Cost Summary','Usage Summary by Item','Usage','Work'];
+  const sectionTitles=['Usage Summary by Item','Work Summary by Measure'];
   const headerFirst=['Item','Asset','Date'];
   let y=30,rowNo=0;
   function page(){
@@ -631,7 +652,7 @@ async function exportPdf(){
     doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(255,255,255);
     doc.text('Asset Usage System Report',14,11);
     doc.setFont('helvetica','normal');doc.setFontSize(9);
-    doc.text('Month: '+($('reportMonth').value||'All'),282,11,{align:'right'});
+    doc.text(periodLabel('report')+' · '+$('reportKind').value,282,11,{align:'right'});
     doc.setTextColor(...ink);y=30;
   }
   function ensure(height){if(y+height>190){doc.addPage();page()}}
@@ -736,6 +757,8 @@ function renderAll(){renderSelectors();renderDefinitions();renderAssets();render
 $('assetTypeSelect').addEventListener('change',renderMetaFields);
 $('recordApply').addEventListener('click',()=>{recordsPage=0;renderRecords()});
 $('recordMonth').addEventListener('change',()=>{recordsPage=0;syncSelectedMonths()});
+$('recordYear').addEventListener('change',()=>{if($('recordPeriod').value==='month')$('recordMonth').value=$('recordYear').value+'-'+$('recordMonth').value.slice(5);recordsPage=0;syncSelectedMonths()});
+$('recordPeriod').addEventListener('change',()=>{showPeriodFields('record');recordsPage=0;syncSelectedMonths()});
 $('recordAsset').addEventListener('change',()=>{recordsPage=0;renderRecords()});
 $('recordKind').addEventListener('change',()=>{recordsPage=0;renderRecords()});
 $('recordsPaging').addEventListener('click',e=>{
@@ -745,6 +768,9 @@ $('recordsPaging').addEventListener('click',e=>{
 });
 $('recordSort').addEventListener('change',()=>{recordsPage=0;renderRecords()});
 $('reportMonth').addEventListener('change',syncSelectedMonths);
+$('reportYear').addEventListener('change',()=>{if($('reportPeriod').value==='month')$('reportMonth').value=$('reportYear').value+'-'+$('reportMonth').value.slice(5);syncSelectedMonths()});
+$('reportPeriod').addEventListener('change',()=>{showPeriodFields('report');syncSelectedMonths()});
+$('reportKind').addEventListener('change',renderReports);
 $('reportAsset').addEventListener('change',renderReports);
 $('reportItem').addEventListener('change',renderReports);
 
@@ -946,6 +972,7 @@ $('workForm').addEventListener('submit',async e=>{
   e.target.reset(); $('workDate').value=today(); save(); notify('Work record saved.');
 });
 
+showPeriodFields('record');showPeriodFields('report');
 renderAll();
 showLogin();
 initFirebase().catch(err=>{
