@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
   <title>Asset Usage System | Sin Matu Enterprise</title>
-  <link rel="stylesheet" href="./styles.css?v=20261016-unified-v3">
+  <link rel="stylesheet" href="./styles.css?v=20261016-normalized-filters-v6">
 </head>
 <body>
   <header class="topbar">
@@ -136,26 +136,15 @@
         </div>
       </div>
 
-      <div class="filters record-filters">
-        <label>Period<select id="recordPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
+      <div class="filters record-filters aus-shared-filters">
+        <label>Type<select id="recordKind"><option value="usage">Usage</option><option value="work">Work</option></select></label>
         <label>Year<input id="recordYear" type="number" min="2000" max="2100" value="2026"></label>
-        <label>Month<input id="recordMonth" type="month" class="hidden"></label>
-        <label>Asset
-          <select id="recordAsset"></select>
-        </label>
-        <label>Type
-          <select id="recordKind">
-            <option value="usage">Usage</option>
-            <option value="work">Work</option>
-          </select>
-        </label>
-        <label>Sort
-          <select id="recordSort">
-            <option value="desc">Date ↓ Newest first</option>
-            <option value="asc">Date ↑ Oldest first</option>
-          </select>
-        </label>
-        <button id="recordApply" class="secondary record-apply" type="button">Apply</button>
+        <label>Period<select id="recordPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
+        <label class="aus-month-filter">Month<input id="recordMonth" type="month"></label>
+        <label>Asset<select id="recordAsset"></select></label>
+        <label class="aus-item-filter">Item<select id="recordItem"></select></label>
+        <label>Sort<select id="recordSort"><option value="desc">Date ↓ Newest first</option><option value="asc">Date ↑ Oldest first</option></select></label>
+        <button id="recordApply" class="secondary aus-filter-apply" type="button">Apply</button>
       </div>
 
       <div id="recordBulkBar" class="bulk-review hidden" data-role="manager">
@@ -169,13 +158,14 @@
     <section id="view-reports" class="view panel hidden reports-panel">
       <div class="section-head reports-head">
         <h2>Reports & Reconciliation</h2>
-        <div class="report-controls">
-          <label>Period<select id="reportPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
-          <label>Year<input id="reportYear" type="number" min="2000" max="2100" value="2026"></label>
-          <label>Month<input id="reportMonth" type="month" class="hidden"></label>
-          <label>Asset<select id="reportAsset"></select></label>
+        <div class="report-controls aus-shared-filters">
           <label>Type<select id="reportKind"><option value="usage">Usage</option><option value="work">Work</option></select></label>
-          <label>Item<select id="reportItem"></select></label>
+          <label>Year<input id="reportYear" type="number" min="2000" max="2100" value="2026"></label>
+          <label>Period<select id="reportPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
+          <label class="aus-month-filter">Month<input id="reportMonth" type="month"></label>
+          <label>Asset<select id="reportAsset"></select></label>
+          <label class="aus-item-filter">Item<select id="reportItem"></select></label>
+          <button id="reportApply" class="secondary aus-filter-apply" type="button">Apply</button>
         </div>
       </div>
       <div id="reportSummary"></div><div id="reportTotals" class="muted"></div>
@@ -271,6 +261,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261016-persistent-login-v5"></script>
+  <script type="module" src="./app.js?v=20261016-normalized-filters-v6"></script>
 </body>
 </html>
