@@ -33,7 +33,7 @@ function periodKey(prefix){
 }
 function matchesPeriod(date,key){return !key||String(date||'').startsWith(key)}
 function showPeriodFields(prefix){
- const field=$(prefix+'Month'),hide=$(prefix+'Period').value!=='month';field.classList.toggle('hidden',hide);field.closest('label')?.classList.toggle('hidden',hide);
+ const field=$(prefix+'Month'),hide=$(prefix+'Period').value!=='month';field.closest('label')?.classList.toggle('hidden',hide);
 }
 function periodLabel(prefix){const key=periodKey(prefix);return key.length===7?'Month: '+key:'Year: '+key}
 function stopDataSync(){
@@ -296,9 +296,12 @@ function renderSelectors(){
   $('recordAsset').innerHTML=allAssets;
   $('reportAsset').innerHTML=allAssets;
   $('recordAsset').value=oldRecordAsset; $('reportAsset').value=oldReportAsset;
+  const oldRecordItem=$('recordItem').value;
   const oldReportItem=$('reportItem').value;
   $('reportItem').innerHTML='<option value="">All Items</option>'+state.items.map(i=>'<option value="'+esc(itemName(i))+'">'+esc(itemName(i))+'</option>').join('');
   $('reportItem').value=oldReportItem;
+  $('recordItem').innerHTML=$('reportItem').innerHTML;
+  $('recordItem').value=oldRecordItem;
   $('usageItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
   syncUsageItem();
   $('stockItem').innerHTML=optionList(state.items,'Select item',i=>({value:itemName(i),label:itemName(i)}));
@@ -393,7 +396,8 @@ function filteredRecords(month,assetId,kind){
   return state.records.filter(r=>matchesPeriod(r.date,month)&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>dir*a.date.localeCompare(b.date));
 }
 function renderRecords(){
-  const rows=filteredRecords(periodKey('record'),$('recordAsset').value,$('recordKind').value);
+  $('recordItem').closest('label')?.classList.toggle('hidden',$('recordKind').value!=='usage');
+  const rows=filteredRecords(periodKey('record'),$('recordAsset').value,$('recordKind').value).filter(r=>$('recordKind').value!=='usage'||!$('recordItem').value||r.item===$('recordItem').value);
   const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
   recordsPage=Math.min(recordsPage,pages-1);
   $('recordCount').textContent=rows.length+' records';
@@ -807,6 +811,7 @@ $('recordYear').addEventListener('change',()=>{if($('recordPeriod').value==='mon
 $('recordPeriod').addEventListener('change',()=>{showPeriodFields('record');recordsPage=0;syncSelectedMonths()});
 $('recordAsset').addEventListener('change',()=>{recordsPage=0;renderRecords()});
 $('recordKind').addEventListener('change',()=>{recordsPage=0;renderRecords()});
+$('recordItem').addEventListener('change',()=>{recordsPage=0;renderRecords()});
 $('recordsPaging').addEventListener('click',e=>{
  const direction=e.target.closest('[data-page]')?.dataset.page;
  if(direction==='prev'&&recordsPage>0){recordsPage--;renderRecords()}
@@ -819,6 +824,7 @@ $('reportPeriod').addEventListener('change',()=>{showPeriodFields('report');sync
 $('reportKind').addEventListener('change',renderReports);
 $('reportAsset').addEventListener('change',renderReports);
 $('reportItem').addEventListener('change',renderReports);
+$('reportApply').addEventListener('click',()=>{syncSelectedMonths();renderReports()});
 
 $('recordsTable').addEventListener('click',e=>{
   if(e.target.id==='selectVisibleRecords'){document.querySelectorAll('#recordsTable .record-select').forEach(x=>x.checked=e.target.checked);updateBulkReview();return}
