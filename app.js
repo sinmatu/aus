@@ -227,7 +227,7 @@ async function initFirebase(){
   ]);
   const app=A.initializeApp(firebaseConfig);
   fb.auth=U.getAuth(app); fb.db=F.getFirestore(app);
-  await U.setPersistence(fb.auth,U.inMemoryPersistence);
+  await U.setPersistence(fb.auth,U.browserLocalPersistence);
   Object.assign(fb,U,F);
   U.onAuthStateChanged(fb.auth,async user=>{
     if(!user){stopDataSync();currentUser=null;currentRole='';showLogin();return}
