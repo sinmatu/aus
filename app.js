@@ -621,15 +621,44 @@ async function loadScript(src){return new Promise((resolve,reject)=>{const s=doc
 async function exportPdf(){
   await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
   const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),rows=reportMatrix();
-  let y=14;doc.setFontSize(14);doc.text('Asset Usage System Report',14,y);y+=8;doc.setFontSize(8);
+  const navy=[35,56,91],pale=[230,238,248],stripe=[246,249,253],ink=[35,48,67];
   const xs=[14,48,78,119,151,240],widths=[32,27,38,29,85,35];
-  rows.slice(1).forEach(row=>{
-    const cells=row.slice(0,6).map((v,i)=>doc.splitTextToSize(String(v??''),widths[i]));
-    const height=Math.max(6,...cells.map(lines=>Math.max(1,lines.length)*4+2));
-    if(y+height>195){doc.addPage();y=14}
+  const sectionTitles=['Stock / Usage Summary','Recovered Items','Usage Cost Summary','Usage Summary by Item','Usage','Work'];
+  const headerFirst=['Item','Asset','Date'];
+  let y=30,rowNo=0;
+  function page(){
+    doc.setFillColor(...navy);doc.rect(0,0,297,22,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(255,255,255);
+    doc.text('Asset Usage System Report',14,11);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);
+    doc.text('Month: '+($('reportMonth').value||'All'),282,11,{align:'right'});
+    doc.setTextColor(...ink);y=30;
+  }
+  function ensure(height){if(y+height>190){doc.addPage();page()}}
+  page();
+  for(const row of rows.slice(1)){
+    if(row.length===0){y+=3;continue}
+    const first=String(row[0]??'');
+    const section=row.length===1&&first!=='';
+    const header=headerFirst.includes(first)&&row.length>1;
+    const total=/^(grand total|asset usage total)$/i.test(first);
+    if(section){
+      ensure(13);doc.setFillColor(...pale);doc.rect(12,y-4,272,9,'F');
+      doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+      doc.text(first.slice(0,120),15,y+1);doc.setTextColor(...ink);y+=13;rowNo=0;continue;
+    }
+    const cells=row.slice(0,6).map((v,i)=>doc.splitTextToSize(v==null?'':String(v),widths[i]-2));
+    const height=Math.max(7,...cells.map(lines=>Math.max(1,lines.length)*3.4+3));
+    ensure(height+1);
+    if(header||total){doc.setFillColor(...(header?navy:pale));doc.rect(12,y-4,272,height,'F')}
+    else if(rowNo++%2===0){doc.setFillColor(...stripe);doc.rect(12,y-4,272,height,'F')}
+    doc.setFont('helvetica',header||total?'bold':'normal');doc.setFontSize(header?8:7.5);
+    doc.setTextColor(...(header?[255,255,255]:ink));
     cells.forEach((lines,i)=>{if(lines.length)doc.text(lines,xs[i],y)});
-    y+=height;
-  });
+    doc.setTextColor(...ink);y+=height;
+  }
+  const pages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,110,125);doc.line(12,198,284,198);doc.text('Page '+p+' / '+pages,283,203,{align:'right'})}
   doc.save('aus-report-'+($('reportMonth').value||'all')+'.pdf');
 }
 $('exportExcel').addEventListener('click',exportExcel);
