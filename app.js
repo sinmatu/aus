@@ -642,64 +642,90 @@ async function exportExcel(){
 async function loadScript(src){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
 async function exportPdf(){
  await loadScript('https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js');
- const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+ const {jsPDF}=window.jspdf;
+ const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
  const kind=$('reportKind').value,rows=reportRows(),groups=reportAssetGroups(rows);
- const navy=[35,56,91],pale=[230,238,248],stripe=[246,249,253],ink=[35,48,67],left=12;
- const widths=kind==='usage'?[29,24,65,25,72,62]:[30,25,75,83,64];
- const headers=kind==='usage'?['Date','Type','Activity / Quantity','Amount','Description','Personnel']:['Date','Type','Activity / Quantity','Description','Personnel'];
- let y=34,rowNo=0,assetName='';
+ const navy=[35,56,91],ink=[35,48,67],shades=[[238,244,251],[243,248,239]],stripe=[249,250,252];
+ const left=12,width=186,footer=284;
+ const headings=kind==='usage'?['Date','Activity / Quantity','Amount','Description','Personnel']:['Date','Activity / Quantity','Description','Personnel'];
+ const widths=kind==='usage'?[24,43,21,57,41]:[25,50,66,45];
+ let y=39,assetIndex=-1,currentGroup=null,rowsOnPage=0;
  function page(){
-  doc.setFillColor(...navy);doc.rect(0,0,297,22,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(255,255,255);
-  doc.text('Asset Usage System · '+(kind==='usage'?'Usage':'Work')+' Report',12,13);
-  doc.setTextColor(...ink);doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.setFillColor(...navy);doc.rect(0,0,210,20,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('Asset Usage System · '+(kind==='usage'?'Usage':'Work')+' Report',left,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...ink);
   const asset=$('reportAsset').value?(state.assets.find(a=>a.id===$('reportAsset').value)?.name||'Selected Asset'):'All Assets';
-  const detail='Period: '+periodKey('report')+'     Asset: '+asset+(kind==='usage'?'     Item: '+($('reportItem').value||'All Items'):'');
-  doc.text(doc.splitTextToSize(detail,273)[0],12,29);y=36;
+  const item=kind==='usage'?('     Item: '+($('reportItem').value||'All Items')):'';
+  const text='Period: '+periodKey('report')+'     Asset: '+asset+item;
+  const lines=doc.splitTextToSize(text,width);
+  doc.text(lines,left,27);
+  y=27+lines.length*4+6;rowsOnPage=0;
  }
- function ensure(h){if(y+h>192){doc.addPage();page();if(assetName)assetHeading(assetName+' (continued)')}}
- function assetHeading(name){
-  if(y+13>192){doc.addPage();page()}
-  doc.setFillColor(...pale);doc.rect(left,y-4,273,9,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
-  doc.text(doc.splitTextToSize(name,266)[0],left+3,y+1);
-  doc.setTextColor(...ink);y+=13;rowNo=0;
+ function groupBar(continued=false){
+  if(!currentGroup)return;
+  const shade=shades[assetIndex%2];doc.setFillColor(...shade);doc.rect(left,y-4,width,10,'F');
+  doc.setDrawColor(190,201,215);doc.line(left,y-4,left,y+6);
+  doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(10);
+  doc.text(doc.splitTextToSize(currentGroup.name+(continued?' (continued)':''),width-8)[0],left+4,y+2);
+  doc.setTextColor(...ink);y+=13;rowsOnPage=0;
  }
- function sectionHeading(label){
-  ensure(10);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text(label,left+2,y);doc.setTextColor(...ink);y+=7;
+ function newPage(continueGroup=true){
+  doc.addPage();page();
+  if(continueGroup&&currentGroup){groupBar(true);drawHeader()}
  }
- function tableRow(values,widthList,opt={}){
-  const cells=values.map((v,i)=>doc.splitTextToSize(v==null?'':String(v),widthList[i]-4));
-  const height=Math.max(8,...cells.map(lines=>lines.length*3.4+4));
+ function ensure(h,continuation=true){if(y+h>footer)newPage(continuation)}
+ function drawHeader(){
+  const h=7;doc.setFillColor(...navy);doc.rect(left,y-4,width,h,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7.2);doc.setTextColor(255,255,255);
+  let x=left;headings.forEach((head,i)=>{doc.text(head,x+1,y);x+=widths[i]});
+  doc.setTextColor(...ink);y+=h+1;
+ }
+ function row(values,colWidths,options={}){
+  const split=values.map((v,i)=>doc.splitTextToSize(v==null?'':String(v),colWidths[i]-3));
+  const totalLines=Math.max(1,...split.map(x=>x.length));
+  const lineHeight=3.2;
+  const height=Math.max(7,totalLines*lineHeight+3);
   ensure(height+1);
-  if(opt.header||opt.total||rowNo++%2===0){doc.setFillColor(...(opt.header?navy:opt.total?pale:stripe));doc.rect(left,y-4,273,height,'F')}
-  doc.setFont('helvetica',opt.header||opt.total?'bold':'normal');doc.setFontSize(opt.header?8:7.5);
-  doc.setTextColor(...(opt.header?[255,255,255]:ink));
-  let x=left;cells.forEach((lines,i)=>{doc.text(lines,x+2,y);x+=widthList[i]});
-  doc.setTextColor(...ink);y+=height;
- }
- page();
- for(const group of groups){
-  assetName=group.name;ensure(32);assetHeading(group.name);
-  const records=kind==='usage'?group.usage:group.work;
-  tableRow(headers,widths,{header:true});
-  records.forEach(r=>tableRow(kind==='usage'?[r.date,'Usage',recordDetail(r),entryAmount(r),recordRemarks(r)||'—',recordReference(r)||'—']:[r.date,'Work',recordDetail(r),recordRemarks(r)||'—',recordReference(r)||'—'],widths));
-  sectionHeading(kind==='usage'?'Usage Summary by Item · '+group.name:'Work Summary by Measure · '+group.name);
-  if(kind==='usage'){
-   const w=[100,65,55,53];tableRow(['Item','Quantity','Amount (RM)','Unpriced'],w,{header:true});
-   usageItemGroups(records).forEach(t=>tableRow([t.item,t.hasQty?Number(t.qty.toFixed(4))+' '+t.unit:'—',(t.amountCents/100).toFixed(2),t.unpriced],w));
-   const total=amountTotals(records);tableRow([group.name+' · Usage Total','',money(total.cents/100),total.unpriced],w,{total:true});
-  }else{
-   const w=[130,83,60];tableRow(['Measure','Total Quantity','Entries'],w,{header:true});
-   workMeasureGroups(records).forEach(t=>tableRow([t.measure,Number(t.qty.toFixed(4)),t.count],w));
+  const shade=shades[Math.max(0,assetIndex)%2];
+  if(options.total||options.heading||rowsOnPage++%2===0){
+   doc.setFillColor(...(options.total||options.heading?shade:stripe));doc.rect(left,y-4,width,height,'F');
   }
-  y+=7;assetName='';
+  doc.setFont('helvetica',options.heading||options.total?'bold':'normal');doc.setFontSize(7.2);doc.setTextColor(...ink);
+  let x=left;split.forEach((lines,i)=>{doc.text(lines,x+1,y);x+=colWidths[i]});
+  y+=height;
  }
- if(groups.length===0){doc.setFontSize(11);doc.text('No matching records.',12,y)}
- if(groups.length>1){ensure(20);sectionHeading('All Assets · '+(kind==='usage'?'Usage Total':'Work Totals'));if(kind==='usage'){const t=amountTotals(rows);tableRow(['Grand Total',money(t.cents/100),t.unpriced+' unpriced'],[120,85,68],{total:true})}else workMeasureGroups(rows).forEach(t=>tableRow([t.measure,Number(t.qty.toFixed(4)),t.count],[120,85,68]))}
- const pages=doc.internal.getNumberOfPages();
- for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,110,125);doc.line(12,198,285,198);doc.text('Page '+p+' / '+pages,284,204,{align:'right'})}
+ function summaryTitle(label){ensure(12);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...navy);doc.text(label,left+2,y+2);doc.setTextColor(...ink);y+=9}
+ page();
+ for(const [index,group] of groups.entries()){
+  currentGroup=group;assetIndex=index;
+  ensure(35,false);groupBar();
+  drawHeader();
+  const entries=kind==='usage'?group.usage:group.work;
+  for(const r of entries){
+   const cells=kind==='usage'?[r.date,recordDetail(r),entryAmount(r),recordRemarks(r)||'—',recordReference(r)||'—']:[r.date,recordDetail(r),recordRemarks(r)||'—',recordReference(r)||'—'];
+   row(cells,widths);
+  }
+  summaryTitle((kind==='usage'?'Usage Summary by Item':'Work Summary by Measure')+' · '+group.name);
+  if(kind==='usage'){
+   const w=[69,48,38,31];
+   row(['Item','Quantity','Amount (RM)','Unpriced'],w,{heading:true});
+   for(const t of usageItemGroups(entries))row([t.item,t.hasQty?Number(t.qty.toFixed(4))+' '+t.unit:'—',money(t.amountCents/100),t.unpriced],w);
+   const total=amountTotals(entries);row([group.name+' · Total','',money(total.cents/100),total.unpriced],w,{total:true});
+  }else{
+   const w=[79,57,50];row(['Work Measure','Total Quantity','Entries'],w,{heading:true});
+   for(const t of workMeasureGroups(entries))row([t.measure,Number(t.qty.toFixed(4)),t.count],w);
+  }
+  y+=9;currentGroup=null;
+ }
+ if(!groups.length){doc.setTextColor(...ink);doc.text('No matching records.',left,y)}
+ if(groups.length>1){
+  assetIndex=0;ensure(28,false);summaryTitle('All Assets · '+(kind==='usage'?'Usage Grand Total':'Work Totals'));
+  if(kind==='usage'){const t=amountTotals(rows);row(['Grand Total',money(t.cents/100),t.unpriced+' unpriced'],[75,60,51],{total:true})}
+  else for(const t of workMeasureGroups(rows))row([t.measure,Number(t.qty.toFixed(4)),t.count],[75,60,51]);
+ }
+ const count=doc.internal.getNumberOfPages();
+ for(let p=1;p<=count;p++){doc.setPage(p);doc.setDrawColor(200,207,214);doc.line(left,288,198,288);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,110,125);doc.text('Page '+p+' / '+count,198,293,{align:'right'})}
  doc.save('aus-report-'+periodKey('report')+'-'+kind+'.pdf');
 }
 $('exportExcel').addEventListener('click',exportExcel);
