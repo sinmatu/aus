@@ -365,9 +365,10 @@ function recordRemarks(r){return [r.remarks,r.kind==='work'&&r.job?'Job / Ref: '
 function recordsTable(records){
   if(!records.length)return '<div class="empty">No matching records.</div>';
   const manager=currentRole==='manager';
+  const usageView=$('recordKind').value==='usage';
   const selectHead=manager?'<th class="select-col"><input id="selectVisibleRecords" type="checkbox" aria-label="Select reviewable records"></th>':'';
   const reviewHead=manager?'<th>Review</th>':'<th>Actions</th>';
-  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th><th>Amount</th><th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
+  return '<table><thead><tr>'+selectHead+'<th>Date</th><th>Asset</th><th>Type</th><th>Activity / Quantity</th>'+(usageView?'<th>Amount</th>':'')+'<th>Status</th><th>Description</th><th>Personnel</th>'+reviewHead+'</tr></thead><tbody>'+records.map(r=>{
     const a=state.assets.find(x=>x.id===r.assetId);
     const status=r.status||'pending';
     const reviewable=status!=='checked'&&status!=='void'&&status!=='pending_details';
@@ -384,7 +385,7 @@ function recordsTable(records){
       const voidBtn='<button type="button" class="record-action danger-link" data-status="void" '+(status==='void'?'disabled':'')+'>Void Entry</button>';
       reviewCell='<td><div class="record-actions">'+completion+checked+correct+correction+voidBtn+'</div></td>';
     }
-    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td><td>'+esc(entryAmount(r))+'</td><td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell:completion?'<td><div class="record-actions">'+completion+'</div></td>':'<td></td>')+'</tr>';
+    return '<tr data-record-id="'+esc(r.id)+'">'+selectCell+'<td>'+esc(r.date)+'</td><td>'+esc(a?a.name:'Removed asset')+'</td><td><span class="record-kind '+r.kind+'">'+esc(r.kind==='usage'?'Usage':'Work')+'</span></td><td>'+esc(recordDetail(r))+'</td>'+(usageView?'<td>'+esc(entryAmount(r))+'</td>':'')+'<td>'+esc(status==='pending_details'?'Pending Details':status==='pending'?'Pending Review':status)+'</td><td class="remarks-cell">'+esc(recordRemarks(r)||'—')+'</td><td class="sign-cell">'+esc(recordReference(r)||'—')+'</td>'+(manager?reviewCell:completion?'<td><div class="record-actions">'+completion+'</div></td>':'<td></td>')+'</tr>';
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
