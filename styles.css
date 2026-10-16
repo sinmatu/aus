@@ -139,3 +139,11 @@
 .report-asset-group:nth-child(even) .report-kind-section+.report-kind-section{background:#fafcf8}
 .report-asset-group:nth-child(odd)>h3{background:#eaf0f9}
 @media(max-width:760px){#view-records,#view-reports{padding:14px}.record-filters,.reports-head .report-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Identical AUS Records / Reports filter grid; two rows at desktop width */
+#view-records .aus-shared-filters,#view-reports .aus-shared-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:10px;margin:0 0 16px;width:100%}
+.aus-shared-filters label{min-width:0;font-size:.82rem;color:#6b7280;font-weight:650}
+.aus-shared-filters input,.aus-shared-filters select{height:44px;width:100%;min-width:0}
+.aus-shared-filters .aus-filter-apply{height:44px;min-width:0;width:auto;min-height:0;padding:8px 22px;justify-self:start;align-self:end}
+@media(max-width:760px){#view-records .aus-shared-filters,#view-reports .aus-shared-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:420px){#view-records .aus-shared-filters,#view-reports .aus-shared-filters{grid-template-columns:1fr}}
