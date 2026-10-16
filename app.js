@@ -593,8 +593,8 @@ function workMeasureGroups(records){
 }
 function workSummaryTable(records){
  if(!records.length)return '';
- return '<div class="report-kind-section"><h4>Work Summary by Measure</h4><table><thead><tr><th>Measure</th><th>Total Quantity</th><th>Entries</th></tr></thead><tbody>'+
- workMeasureGroups(records).map(g=>'<tr><td>'+esc(g.measure)+'</td><td>'+esc(Number(g.qty.toFixed(4)))+'</td><td>'+g.count+'</td></tr>').join('')+'</tbody></table></div>';
+ return '<div class="report-kind-section"><h4>Work Summary by Measure</h4><table><thead><tr><th>Work Measure</th><th>Total Work</th></tr></thead><tbody>'+
+ workMeasureGroups(records).map(g=>'<tr><td>'+esc(g.measure)+'</td><td>'+esc(Number(g.qty.toFixed(4)))+'</td></tr>').join('')+'</tbody></table></div>';
 }
 function renderReports(){
  if(!$('reportTable'))return;
@@ -627,13 +627,13 @@ function reportMatrix(){
    usageItemGroups(records).forEach(t=>aoa.push([t.item,t.hasQty?Number(t.qty.toFixed(4)):null,t.unit,t.amountCents/100,t.unpriced]));
    const total=amountTotals(records);aoa.push(['Asset Usage Total',null,null,total.cents/100,total.unpriced]);
   }else{
-   aoa.push(['Work Summary by Measure'],['Measure','Total Quantity','Entries']);
-   workMeasureGroups(records).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4)),t.count]));
+   aoa.push(['Work Summary by Measure'],['Work Measure','Total Work']);
+   workMeasureGroups(records).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4))]));
   }
   aoa.push([]);
  }
  if(kind==='usage'){const total=amountTotals(rows);aoa.push(['Grand total',null,null,total.cents/100,total.unpriced])}
- else{aoa.push(['All Assets - Work Totals'],['Measure','Total Quantity','Entries']);workMeasureGroups(rows).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4)),t.count]))}
+ else{aoa.push(['All Assets - Work Totals'],['Work Measure','Total Work']);workMeasureGroups(rows).forEach(t=>aoa.push([t.measure,Number(t.qty.toFixed(4))]))}
  return aoa;
 }
 async function exportExcel(){
@@ -717,8 +717,8 @@ async function exportPdf(){
    for(const t of usageItemGroups(entries))row([t.item,t.hasQty?Number(t.qty.toFixed(4))+' '+t.unit:'—',money(t.amountCents/100),t.unpriced],w);
    const total=amountTotals(entries);row([group.name+' · Total','',money(total.cents/100),total.unpriced],w,{total:true});
   }else{
-   const w=[79,57,50];row(['Work Measure','Total Quantity','Entries'],w,{heading:true});
-   for(const t of workMeasureGroups(entries))row([t.measure,Number(t.qty.toFixed(4)),t.count],w);
+   const w=[105,81];row(['Work Measure','Total Work'],w,{heading:true});
+   for(const t of workMeasureGroups(entries))row([t.measure,Number(t.qty.toFixed(4))],w);
   }
   y+=9;currentGroup=null;
  }
@@ -726,7 +726,7 @@ async function exportPdf(){
  if(groups.length>1){
   assetIndex=0;ensure(28,false);summaryTitle('All Assets · '+(kind==='usage'?'Usage Grand Total':'Work Totals'));
   if(kind==='usage'){const t=amountTotals(rows);row(['Grand Total',money(t.cents/100),t.unpriced+' unpriced'],[75,60,51],{total:true})}
-  else for(const t of workMeasureGroups(rows))row([t.measure,Number(t.qty.toFixed(4)),t.count],[75,60,51]);
+  else for(const t of workMeasureGroups(rows))row([t.measure,Number(t.qty.toFixed(4))],[105,81]);
  }
  const count=doc.internal.getNumberOfPages();
  for(let p=1;p<=count;p++){doc.setPage(p);doc.setDrawColor(200,207,214);doc.line(left,288,198,288);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,110,125);doc.text('Page '+p+' / '+count,198,293,{align:'right'})}
