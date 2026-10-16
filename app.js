@@ -392,7 +392,7 @@ function recordsTable(records){
   }).join('')+'</tbody></table>';
 }
 function filteredRecords(month,assetId,kind){
-  const dir=$('recordSort')?.value==='asc'?1:-1;
+  const dir=-1;
   return state.records.filter(r=>matchesPeriod(r.date,month)&&(!assetId||r.assetId===assetId)&&(!kind||r.kind===kind)).sort((a,b)=>dir*a.date.localeCompare(b.date));
 }
 function renderRecords(){
@@ -817,7 +817,7 @@ $('recordsPaging').addEventListener('click',e=>{
  if(direction==='prev'&&recordsPage>0){recordsPage--;renderRecords()}
  if(direction==='next'){recordsPage++;renderRecords()}
 });
-$('recordSort').addEventListener('change',()=>{recordsPage=0;renderRecords()});
+
 $('reportMonth').addEventListener('change',syncSelectedMonths);
 $('reportYear').addEventListener('change',()=>{if($('reportPeriod').value==='month')$('reportMonth').value=$('reportYear').value+'-'+$('reportMonth').value.slice(5);syncSelectedMonths()});
 $('reportPeriod').addEventListener('change',()=>{showPeriodFields('report');syncSelectedMonths()});
