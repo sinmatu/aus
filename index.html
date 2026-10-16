@@ -170,12 +170,12 @@
       <div class="section-head reports-head">
         <h2>Reports & Reconciliation</h2>
         <div class="report-controls">
-          <select id="reportKind" aria-label="Report type"><option value="usage">Usage</option><option value="work">Work</option></select>
-          <select id="reportPeriod" aria-label="Report period"><option value="year">Full Year</option><option value="month">Monthly</option></select>
-          <input id="reportYear" type="number" min="2000" max="2100" value="2026" aria-label="Report year">
-          <input id="reportMonth" type="month" class="hidden" aria-label="Report month">
-          <select id="reportAsset" aria-label="Report asset"></select>
-          <select id="reportItem" aria-label="Report item"></select>
+          <label>Period<select id="reportPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
+          <label>Year<input id="reportYear" type="number" min="2000" max="2100" value="2026"></label>
+          <label>Month<input id="reportMonth" type="month" class="hidden"></label>
+          <label>Asset<select id="reportAsset"></select></label>
+          <label>Type<select id="reportKind"><option value="usage">Usage</option><option value="work">Work</option></select></label>
+          <label>Item<select id="reportItem"></select></label>
         </div>
       </div>
       <div id="reportSummary"></div><div id="reportTotals" class="muted"></div>
@@ -271,6 +271,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261016-portrait-v3"></script>
+  <script type="module" src="./app.js?v=20261016-portrait-v4"></script>
 </body>
 </html>
