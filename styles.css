@@ -119,3 +119,23 @@
 .report-asset-group .report-kind-section+.report-kind-section{margin-top:12px;border-top:1px solid #dbe2ed;background:#f8fafc}
 #reportTotals{margin:12px 0}
 @media(max-width:900px){.record-filters,.reports-head .report-controls{grid-template-columns:repeat(2,minmax(0,1fr))}#recordsTable table,#reportTable table{min-width:760px;table-layout:auto}}
+
+/* Restore compact login: do not let general panel rules stretch sign-in */
+#loginView.login-panel{width:min(420px,calc(100% - 28px));max-width:420px;margin:60px auto;padding:22px}
+#loginView.login-panel form{width:100%}
+#loginView.login-panel input,#loginView.login-panel button{max-width:100%}
+/* Shared form / table visual system for Records and Reports */
+#view-records,#view-reports{padding:22px 24px}
+#view-records .section-head,#view-reports .section-head{margin:0 0 16px}
+#view-records .section-head h2,#view-reports .section-head h2{font-size:1.45rem;margin:0}
+.record-filters,.reports-head .report-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
+.record-filters label,.reports-head label{min-width:0;font-size:.82rem;color:#6b7280}
+.record-filters input,.record-filters select,.reports-head input,.reports-head select{height:46px;min-width:0}
+#view-records .table-wrap,#view-reports .table-wrap{border-radius:10px}
+#recordsTable table,#reportTable table{font-size:.88rem}
+#recordsTable th,#reportTable th{background:#f9fafb}
+.report-asset-group:nth-child(even){border-color:#dce5d7}
+.report-asset-group:nth-child(even)>h3{background:#eff5eb;color:#37533a}
+.report-asset-group:nth-child(even) .report-kind-section+.report-kind-section{background:#fafcf8}
+.report-asset-group:nth-child(odd)>h3{background:#eaf0f9}
+@media(max-width:760px){#view-records,#view-reports{padding:14px}.record-filters,.reports-head .report-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
