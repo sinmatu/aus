@@ -103,7 +103,7 @@
       </div>
     </section>
 
-    <section id="view-stock" class="view hidden"><div class="page-head"><div><div class="eyebrow">Warehouse</div><h2>Stock In & Recovered Items</h2></div><p class="muted">Record incoming supplies or issue recovered items when sold or disposed.</p></div><div class="panel"><h3>New Stock In</h3><form id="stockForm"><div class="grid three"><label>Date<input type="date" id="stockDate" required></label><label>Item<select id="stockItem" required></select></label><label>Quantity<input type="number" id="stockQty" min="0.01" step="0.01" required></label></div><label>Unit<input id="stockUnit" readonly placeholder="Auto assigned"></label><label>Reference / Remarks<textarea id="stockRemarks" maxlength="400" placeholder="Supplier, delivery reference, purpose"></textarea></label><button class="primary" type="submit">Save Stock In</button></form></div><div class="panel"><h3>Recovered Stock Out</h3><form id="recoveryForm"><div class="grid three"><label>Date<input id="recoveryDate" type="date" required></label><label>Recovered Item<select id="recoveryItem" required></select></label><label>Quantity<input id="recoveryQty" type="number" step="1" min="1" required></label></div><label>Reason<select id="recoveryReason"><option value="sold">Sold</option><option value="disposed">Disposed</option><option value="other">Other</option></select></label><label>Reference / Remarks<textarea id="recoveryRemarks" maxlength="400"></textarea></label><button class="primary" type="submit">Save Recovered Stock Out</button></form></div><div class="panel"><h3>Stock Movement History</h3><div class="table-wrap" id="movementTable"></div></div></section>
+    <section id="view-stock" class="view hidden"><div class="page-head"><div><div class="eyebrow">Warehouse</div><h2>Stock In & Recovered Items</h2></div><p class="muted">Record incoming supplies or issue recovered items when sold or disposed.</p></div><div class="panel"><h3>New Stock In</h3><form id="stockForm"><div class="grid three"><label>Date<input type="date" id="stockDate" required></label><label>Item<select id="stockItem" required></select></label><label>Quantity<input type="number" id="stockQty" min="0.01" step="0.01" required></label></div><label>Unit<input id="stockUnit" readonly placeholder="Auto assigned"></label><label>Reference / Remarks<textarea id="stockRemarks" maxlength="400" placeholder="Supplier, delivery reference, purpose"></textarea></label><button class="primary" type="submit">Save Stock In</button></form></div><div class="panel"><h3>Recovered Stock Out</h3><form id="recoveryForm"><div class="grid three"><label>Date<input id="recoveryDate" type="date" required></label><label>Recovered Item<select id="recoveryItem" required></select></label><label>Quantity<input id="recoveryQty" type="number" step="1" min="1" required></label></div><label>Reason<select id="recoveryReason"><option value="sold">Sold</option><option value="disposed">Disposed</option><option value="other">Other</option></select></label><label>Reference / Remarks<textarea id="recoveryRemarks" maxlength="400"></textarea></label><button class="primary" type="submit">Save Recovered Stock Out</button></form></div><div class="panel"><h3>Live Stock &amp; Usage Overview</h3><div id="stockSummary" class="table-wrap"></div><h3>Recovered Items</h3><div id="recoverySummary" class="table-wrap"></div></div><div class="panel"><h3>Stock Movement History</h3><div class="table-wrap" id="movementTable"></div></div></section>
 
     <section id="view-work" class="view hidden">
       <div class="page-head">
@@ -137,15 +137,14 @@
       </div>
 
       <div class="filters record-filters">
-        <label>Month
-          <input id="recordMonth" type="month">
-        </label>
+        <label>Period<select id="recordPeriod"><option value="year">Full Year</option><option value="month">Monthly</option></select></label>
+        <label>Year<input id="recordYear" type="number" min="2000" max="2100" value="2026"></label>
+        <label>Month<input id="recordMonth" type="month" class="hidden"></label>
         <label>Asset
           <select id="recordAsset"></select>
         </label>
         <label>Type
           <select id="recordKind">
-            <option value="">All records</option>
             <option value="usage">Usage</option>
             <option value="work">Work</option>
           </select>
@@ -171,14 +170,15 @@
       <div class="section-head reports-head">
         <h2>Reports & Reconciliation</h2>
         <div class="report-controls">
-          <input id="reportMonth" type="month" aria-label="Report month">
+          <select id="reportKind" aria-label="Report type"><option value="usage">Usage</option><option value="work">Work</option></select>
+          <select id="reportPeriod" aria-label="Report period"><option value="year">Full Year</option><option value="month">Monthly</option></select>
+          <input id="reportYear" type="number" min="2000" max="2100" value="2026" aria-label="Report year">
+          <input id="reportMonth" type="month" class="hidden" aria-label="Report month">
           <select id="reportAsset" aria-label="Report asset"></select>
           <select id="reportItem" aria-label="Report item"></select>
         </div>
       </div>
-      <h3>Stock & Usage Summary</h3><div id="stockSummary" class="table-wrap"></div>
-      <h3>Recovered Items</h3><div id="recoverySummary" class="table-wrap"></div>
-      <div id="reportSummary"></div>
+      <div id="reportSummary"></div><div id="reportTotals" class="muted"></div>
       <div id="reportTable" class="table-wrap report-table-wrap"></div>
       <div class="actions report-actions">
         <button id="exportExcel" class="secondary" type="button">Export Excel</button>
@@ -271,6 +271,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app.js?v=20261015-personnel-normalized-v1"></script>
+  <script type="module" src="./app.js?v=20261016-split-year-reports-v1"></script>
 </body>
 </html>
