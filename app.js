@@ -33,7 +33,7 @@ function periodKey(prefix){
 }
 function matchesPeriod(date,key){return !key||String(date||'').startsWith(key)}
 function showPeriodFields(prefix){
- $(prefix+'Month').classList.toggle('hidden',$(prefix+'Period').value!=='month');
+ const field=$(prefix+'Month'),hide=$(prefix+'Period').value!=='month';field.classList.toggle('hidden',hide);field.closest('label')?.classList.toggle('hidden',hide);
 }
 function periodLabel(prefix){const key=periodKey(prefix);return key.length===7?'Month: '+key:'Year: '+key}
 function stopDataSync(){
@@ -595,7 +595,7 @@ function workSummaryTable(records){
 function renderReports(){
  if(!$('reportTable'))return;
  const kind=$('reportKind').value,rows=reportRows(),groups=reportAssetGroups(rows);
- $('reportItem').classList.toggle('hidden',kind!=='usage');
+ $('reportItem').closest('label')?.classList.toggle('hidden',kind!=='usage');
  $('reportSummary').innerHTML='';
  $('reportTable').innerHTML=rows.length?groups.map(g=>{
   const records=kind==='usage'?g.usage:g.work;
